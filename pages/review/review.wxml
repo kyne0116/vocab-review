@@ -1,0 +1,123 @@
+<view class="container">
+
+  <!-- 任务看板：今天没有到期任务时的状态页 -->
+  <view wx:if="{{state === 'empty'}}">
+    <view class="card board-head">
+      <view class="board-title">🔁 今日复习</view>
+      <view class="board-streak" wx:if="{{streak > 0}}">连续学习 {{streak}} 天</view>
+    </view>
+
+    <view class="card board-card">
+      <view class="board-line ok">✅ 今天没有到期的任务</view>
+      <view class="hr"></view>
+      <view class="board-row" wx:if="{{lastReview}}">
+        <text class="k">上次复习</text>
+        <text class="v">{{lastReview.date}} · 第{{lastReview.batchNo}}批 · {{lastReview.total}}词 · 错{{lastReview.wrong}}</text>
+      </view>
+      <view class="board-row" wx:if="{{!lastReview}}">
+        <text class="k">上次复习</text>
+        <text class="v">还没有复习记录</text>
+      </view>
+      <view class="board-row">
+        <text class="k">错词本</text>
+        <text class="v">{{wrongCount}} 词待巩固</text>
+      </view>
+      <view class="board-row" wx:if="{{nextDue}}">
+        <text class="k">下次任务</text>
+        <text class="v">第{{nextDue.batchNo}}批 · {{nextDue.days}}天后（{{nextDue.date}}）</text>
+      </view>
+      <view class="board-row" wx:if="{{!nextDue}}">
+        <text class="k">下次任务</text>
+        <text class="v">已全部安排完 🎉</text>
+      </view>
+      <view class="hr"></view>
+      <view class="board-note text-muted">复习节点：学后第 1、2、3、4、6、8、11、13、16、21 天</view>
+    </view>
+
+    <view class="board-actions">
+      <button wx:if="{{wrongCount > 0}}" class="btn-primary action" bindtap="goFree">复习错词本 {{wrongCount}} 词</button>
+      <button wx:else class="btn-plain action">错词本已清空 👍</button>
+      <button wx:if="{{nextDue}}" class="btn-plain action" bindtap="goNextDue">提前复习第 {{nextDue.batchNo}} 批</button>
+    </view>
+  </view>
+
+  <!-- 手动复习：该批不存在 -->
+  <view wx:elif="{{state === 'noBatch'}}" class="card empty">
+    <view class="empty-icon">🤔</view>
+    <view>找不到这一批</view>
+    <view class="text-muted" style="margin-top:12rpx;">该批可能已被清空</view>
+    <button class="btn-primary" style="margin-top:30rpx;" bindtap="goBack">返回</button>
+  </view>
+
+  <!-- 手动复习：该批无待复习词 -->
+  <view wx:elif="{{state === 'manualEmpty'}}" class="card empty">
+    <view class="empty-icon">👍</view>
+    <view>本批没有待复习的词</view>
+    <view class="text-muted" style="margin-top:12rpx;">之前的复习没有答错的词（遗忘池为空），无需再复习</view>
+    <button class="btn-primary" style="margin-top:30rpx;" bindtap="goBack">返回</button>
+  </view>
+
+  <!-- 手动复习：该批已全部完成 -->
+  <view wx:elif="{{state === 'manualDone'}}" class="card empty">
+    <view class="empty-icon">🎉</view>
+    <view>本批已完成全部 10 次复习</view>
+    <view class="text-muted" style="margin-top:12rpx;">可用「重学」巩固，或从总览选其他批次</view>
+    <button class="btn-primary" style="margin-top:30rpx;" bindtap="goBack">返回</button>
+  </view>
+
+  <!-- 自由复习：错词本为空 -->
+  <view wx:elif="{{state === 'freeEmpty'}}" class="card empty">
+    <view class="empty-icon">👏</view>
+    <view>错词本已清空</view>
+    <view class="text-muted" style="margin-top:12rpx;">没有需要巩固的单词，继续保持！</view>
+    <button class="btn-primary" style="margin-top:30rpx;" bindtap="goBack">返回</button>
+  </view>
+
+  <!-- 遗忘池为空，本轮自动完成 -->
+  <view wx:elif="{{state === 'autoDone'}}" class="card empty">
+    <view class="empty-icon">👍</view>
+    <view>本周期的遗忘词为空，已自动完成</view>
+    <view class="text-muted" style="margin-top:12rpx;">前几轮没有答错的单词，无需复习</view>
+  </view>
+
+  <!-- 复习进行中 -->
+  <block wx:elif="{{state === 'quiz'}}">
+    <view class="progress-bar">
+      <view class="progress-inner" style="width: {{progress}}%;"></view>
+    </view>
+    <view class="progress-text text-muted">
+      <block wx:if="{{mode === 'free'}}">{{index + 1}} / {{items.length}} · 错词本自由复习 · 答对自动移出</block>
+      <block wx:else>{{index + 1}} / {{items.length}} · 第 {{current.batchNo}} 批 · 第 {{roundOf(current.batchNo)}} 次复习</block>
+    </view>
+
+    <view class="card quiz-card">
+      <view class="quiz-word">{{current.word}}</view>
+      <view class="quiz-phonetic" wx:if="{{current.phonetic}}">{{current.phonetic}}</view>
+
+      <view wx:if="{{revealed}}" class="quiz-meaning">{{current.meaning}}</view>
+      <view wx:else class="quiz-hint" bindtap="onReveal">点击查看释义</view>
+    </view>
+
+    <button wx:if="{{!revealed}}" class="btn-primary" bindtap="onReveal">显示释义</button>
+
+    <view wx:else class="judge">
+      <button class="judge-btn remember" bindtap="onRemember">✓ 记得</button>
+      <button class="judge-btn forget" bindtap="onForget">✗ 忘记了</button>
+    </view>
+  </block>
+
+  <!-- 复习完成 -->
+  <block wx:elif="{{state === 'result'}}">
+    <view class="card result">
+      <view class="result-icon">🎊</view>
+      <view class="result-title">{{mode === 'free' ? '错词本复习完成' : (mode === 'manual' ? '本批复习完成' : '今日复习完成')}}</view>
+      <view class="result-row">复习单词：{{items.length}} 个</view>
+      <view class="result-row remember">记得：{{remembered}} 个</view>
+      <view class="result-row forget">忘记：{{forgot}} 个</view>
+      <view class="result-note text-muted" wx:if="{{mode === 'free'}}">答对的词已自动移出错词本；忘记的词保留待巩固</view>
+      <view class="result-note text-muted" wx:else>涉及批次：{{batchNos}}</view>
+    </view>
+    <button class="btn-primary" bindtap="goBack">返回首页</button>
+  </block>
+
+</view>

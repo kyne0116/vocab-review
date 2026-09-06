@@ -1,0 +1,58 @@
+<view class="container">
+  <view class="card head" wx:if="{{batch}}">
+    <view class="head-title">第 {{batch.batchNo}} 批 · {{batch.words.length}} 词</view>
+    <view class="head-info">学习日期 {{batch.date}}</view>
+  </view>
+
+  <!-- 模式选择 -->
+  <block wx:if="{{batch && !mode}}">
+    <view class="card">
+      <view class="mode-title">选择学习方式</view>
+      <view class="mode-btn" bindtap="chooseEn">
+        <view class="mode-icon">🔤</view>
+        <view class="mode-name">展示英文</view>
+        <view class="mode-desc">显示英文单词，点击后出现中文释义，并朗读中文</view>
+      </view>
+      <view class="mode-btn" bindtap="chooseCn">
+        <view class="mode-icon">🈶</view>
+        <view class="mode-name">展示中文</view>
+        <view class="mode-desc">显示中文释义，点击后出现英文单词，并朗读英文</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 学习中 -->
+  <block wx:if="{{batch && mode}}">
+    <view class="card mode-bar">
+      <view class="mode-tab {{mode === 'en' ? 'active' : ''}}" bindtap="chooseEn">🔤 展示英文</view>
+      <view class="mode-tab {{mode === 'cn' ? 'active' : ''}}" bindtap="chooseCn">🈶 展示中文</view>
+    </view>
+
+    <view class="card toolbar">
+      <text class="text-muted">已点击 {{revealedCount}} / {{items.length}}</text>
+      <view class="toolbar-btns">
+        <view class="link-btn" bindtap="revealAll">全部显示</view>
+        <view class="link-btn" bindtap="hideAll">重新开始</view>
+      </view>
+    </view>
+
+    <view class="card list">
+      <view class="study-item" wx:for="{{items}}" wx:key="w" data-idx="{{index}}" bindtap="tapWord">
+        <text class="study-idx">{{index + 1}}</text>
+        <view class="study-main">
+          <block wx:if="{{mode === 'en'}}">
+            <view class="study-front">{{item.w}}</view>
+            <view class="study-phonetic" wx:if="{{item.p}}">{{item.p}}</view>
+            <view class="study-back" wx:if="{{item.revealed}}">🔊 {{item.m}}</view>
+            <view class="study-hint" wx:else>点击显示中文并朗读</view>
+          </block>
+          <block wx:else>
+            <view class="study-front cn">{{item.m}}</view>
+            <view class="study-back" wx:if="{{item.revealed}}">🔊 {{item.w}}<text wx:if="{{item.p}}" class="study-phonetic-inline"> {{item.p}}</text></view>
+            <view class="study-hint" wx:else>点击显示英文并朗读</view>
+          </block>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

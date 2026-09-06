@@ -1,0 +1,30 @@
+/* 错词本页样式 */
+.head { margin-bottom: 24rpx; }
+.head-title { font-size: 36rpx; font-weight: bold; }
+.head-info { margin-top: 8rpx; }
+
+.list { padding: 4rpx 30rpx; }
+.wl {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 22rpx 0;
+  border-bottom: 2rpx solid #f6f6f6;
+}
+.wl:last-child { border-bottom: none; }
+.wl-left { flex: 1; min-width: 0; }
+.wl-word { font-size: 34rpx; font-weight: bold; color: #e64340; }
+.wl-mean { font-size: 26rpx; color: #555; margin-top: 4rpx; }
+.wl-batch { font-size: 22rpx; margin-top: 4rpx; }
+.wl-btn {
+  background: #e64340;
+  color: #fff;
+  font-size: 24rpx;
+  border-radius: 10rpx;
+  padding: 12rpx 20rpx;
+  flex-shrink: 0;
+  margin-left: 20rpx;
+}
+
+.empty { text-align: center; padding: 80rpx 30rpx; }
+.empty-icon { font-size: 80rpx; margin-bottom: 20rpx; }

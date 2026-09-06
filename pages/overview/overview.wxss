@@ -1,0 +1,125 @@
+.top { margin-bottom: 24rpx; }
+.top-title { font-size: 34rpx; font-weight: bold; }
+.progress {
+  height: 16rpx;
+  background: #f0f0f0;
+  border-radius: 10rpx;
+  margin-top: 24rpx;
+  overflow: hidden;
+}
+.progress-fill { height: 100%; background: #07c160; border-radius: 10rpx; }
+.top-sub { margin-top: 16rpx; color: #999; font-size: 26rpx; }
+
+/* 批次点阵：全书每批一个圆点，固定四色语义
+   done(绿实）   = 已学且 10 次复习全部完成
+   learning(橙描边) = 正在复习中
+   current(绿框) = 当前待学批
+   todo(灰)     = 未学 */
+.dots-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+.dot {
+  width: 22rpx;
+  height: 22rpx;
+  border-radius: 50%;
+  background: #e5e5e5; /* todo */
+}
+.dot.done { background: #07c160; }
+.dot.learning { background: #ffe9aa; border: 2rpx solid #f59a23; box-sizing: border-box; }
+.dot.current { background: #fff; border: 3rpx solid #07c160; box-sizing: border-box; }
+
+.batch {
+  margin-bottom: 24rpx;
+  padding: 26rpx 30rpx;
+}
+.batch-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.bh-title { font-size: 32rpx; font-weight: bold; }
+.bh-sub {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin-top: 12rpx;
+}
+.state {
+  font-size: 22rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 24rpx;
+  flex-shrink: 0;
+}
+.state.done { background: #e8f8ef; color: #07c160; }
+.state.learning { background: #fff4e0; color: #d4880f; }
+.state.current { background: #e6f7ff; color: #0a9dff; }
+.state.todo { background: #f3f3f3; color: #999; }
+.review-text { font-size: 24rpx; color: #555; }
+.wrong-tag {
+  font-size: 22rpx;
+  color: #e64340;
+  background: #fff0ef;
+  padding: 4rpx 14rpx;
+  border-radius: 24rpx;
+}
+.bh-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10rpx;
+  flex-shrink: 0;
+  margin-left: 20rpx;
+}
+.ops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  justify-content: flex-end;
+}
+.op {
+  color: #576b95;
+  font-size: 26rpx;
+}
+.op.act { color: #07c160; font-weight: bold; }
+.op.dim { color: #bbb; }
+.arrow { color: #bbb; font-size: 24rpx; }
+
+.hr { height: 2rpx; background: #f0f0f0; margin: 20rpx 0; }
+
+.reviews-dots {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+.rd {
+  width: 22rpx;
+  height: 22rpx;
+  border-radius: 50%;
+  background: #e5e5e5;
+}
+.rd.on { background: #07c160; }
+.rd-label {
+  margin-left: 12rpx;
+  color: #999;
+  font-size: 22rpx;
+}
+
+.word-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 12rpx 0;
+  border-bottom: 1rpx solid #f7f7f7;
+}
+.word-item:last-child { border-bottom: none; }
+.w { font-weight: bold; font-size: 28rpx; }
+.m { color: #666; font-size: 26rpx; margin-left: 20rpx; text-align: right; }
+
+.rh { font-size: 24rpx; color: #666; padding: 8rpx 0; }
+.rw { font-size: 24rpx; margin-top: 8rpx; }
+.rw.text-muted { color: #999; }
+.rw:not(.text-muted) { color: #e64340; }

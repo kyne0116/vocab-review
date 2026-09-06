@@ -1,0 +1,90 @@
+.progress-bar {
+  height: 12rpx;
+  background: #eee;
+  border-radius: 6rpx;
+  overflow: hidden;
+  margin-bottom: 12rpx;
+}
+.progress-inner {
+  height: 100%;
+  background: #07c160;
+  transition: width 0.2s;
+}
+.progress-text { text-align: center; margin-bottom: 24rpx; }
+
+/* ---- 任务看板（无到期任务的空态） ---- */
+.board-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+.board-title { font-size: 36rpx; font-weight: bold; }
+.board-streak {
+  color: #f59a23;
+  font-size: 24rpx;
+  font-weight: bold;
+  background: #fff7e6;
+  padding: 8rpx 20rpx;
+  border-radius: 24rpx;
+}
+.board-card { margin-bottom: 30rpx; }
+.board-line.ok {
+  color: #07c160;
+  font-size: 32rpx;
+  font-weight: bold;
+  padding: 8rpx 0;
+}
+.board-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 20rpx;
+  padding: 14rpx 0;
+}
+.board-row .k { color: #999; font-size: 26rpx; flex-shrink: 0; }
+.board-row .v { color: #333; font-size: 26rpx; text-align: right; }
+.hr { height: 2rpx; background: #f0f0f0; margin: 16rpx 0; }
+.board-note { margin-top: 8rpx; }
+.board-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+.board-actions .action { width: 100%; }
+
+.quiz-card {
+  text-align: center;
+  padding: 80rpx 30rpx;
+  margin-bottom: 30rpx;
+}
+.quiz-word { font-size: 64rpx; font-weight: bold; }
+.quiz-phonetic { color: #999; margin-top: 16rpx; font-size: 28rpx; }
+.quiz-hint { color: #576b95; margin-top: 50rpx; font-size: 28rpx; }
+.quiz-meaning {
+  margin-top: 50rpx;
+  font-size: 36rpx;
+  color: #07c160;
+  font-weight: bold;
+}
+
+.judge { display: flex; gap: 24rpx; }
+.judge-btn {
+  flex: 1;
+  color: #fff;
+  font-size: 32rpx;
+  border-radius: 16rpx;
+}
+.judge-btn.remember { background: #07c160; }
+.judge-btn.forget { background: #e64340; }
+
+.empty { text-align: center; padding: 80rpx 30rpx; }
+.empty-icon { font-size: 80rpx; margin-bottom: 20rpx; }
+
+.result { text-align: center; padding: 60rpx 30rpx; margin-bottom: 30rpx; }
+.result-icon { font-size: 80rpx; }
+.result-title { font-size: 38rpx; font-weight: bold; margin: 20rpx 0 30rpx; }
+.result-row { font-size: 30rpx; margin-top: 14rpx; }
+.result-row.remember { color: #07c160; }
+.result-row.forget { color: #e64340; }
+.result-note { margin-top: 30rpx; }

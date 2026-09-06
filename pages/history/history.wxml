@@ -1,0 +1,39 @@
+<view class="container">
+  <view class="text-muted" style="text-align:center;margin-bottom:20rpx;">当前账号：{{accountName}}</view>
+  <view wx:if="{{records.length === 0}}" class="card empty">
+    <view class="empty-icon">📭</view>
+    <view>还没有学习记录</view>
+    <view class="text-muted" style="margin-top:12rpx;">先去学一批新单词吧</view>
+  </view>
+
+  <view wx:else>
+    <view class="card batch" wx:for="{{records}}" wx:key="batchId" wx:for-item="rec">
+      <view class="batch-head" bindtap="toggle" data-id="{{rec.batchId}}">
+        <view>
+          <view class="batch-title">第 {{rec.batchNo}} 批 · {{rec.words.length}} 词</view>
+          <view class="text-muted">学习日期：{{rec.date}}</view>
+        </view>
+        <view class="batch-right">
+          <view class="badge {{rec.reviewsDone >= 10 ? 'done' : ''}}">复习 {{rec.reviewsDone}}/10</view>
+          <view class="study-link" catchtap="goStudy" data-id="{{rec.batchId}}">两种方式学习 ▸</view>
+          <view class="toggle-arrow">{{rec.open ? '收起 ▲' : '展开 ▼'}}</view>
+        </view>
+      </view>
+
+      <block wx:if="{{rec.open}}">
+        <view class="hr"></view>
+        <view class="word-item" wx:for="{{rec.words}}" wx:key="w">
+          <text class="w">{{item.w}}</text>
+          <text class="m">{{item.m}}</text>
+        </view>
+        <view class="hr"></view>
+        <view class="rh-title">复习记录：</view>
+        <view class="rh" wx:for="{{rec.reviewHistory}}" wx:key="round">
+          第{{item.round}}次 · {{item.date}} · 共{{item.total}}词，错{{item.wrong}}词
+        </view>
+        <view class="rh text-muted" wx:if="{{rec.reviewHistory.length === 0}}">暂未开始复习</view>
+        <view class="rh text-muted" wx:if="{{rec.wrongPool.length > 0}}">当前遗忘池：{{rec.wrongPool.length}} 词（后续轮次将复习）</view>
+      </block>
+    </view>
+  </view>
+</view>

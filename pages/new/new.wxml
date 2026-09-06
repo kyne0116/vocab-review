@@ -1,0 +1,40 @@
+<view class="container">
+  <block wx:if="{{batch}}">
+    <view class="card head">
+      <view class="head-main">
+        <view class="head-title">{{accountName}} · 第 {{batch.batchNo}} 批新单词</view>
+        <view class="head-info">共 {{batch.words.length}} 词 · {{today}}</view>
+        <view class="head-range text-muted">词库第 {{batch.start + 1}} ~ {{batch.end + 1}} 位（按顺序）</view>
+      </view>
+      <view wx:if="{{mode === 'auto'}}" class="learn-btn {{learnActive ? 'stop' : ''}}" bindtap="toggleLearn">{{learnBtn}}</view>
+    </view>
+
+    <view class="mode-bar">
+      <view class="mode-tab {{mode === 'manual' ? 'active' : ''}}" data-mode="manual" bindtap="switchMode">👆 手动点读</view>
+      <view class="mode-tab {{mode === 'auto' ? 'active' : ''}}" data-mode="auto" bindtap="switchMode">⏭ 自动顺读</view>
+    </view>
+    <view wx:if="{{mode === 'manual'}}" class="manual-tip">手动点读：点哪行读哪行（英文 + 中文连读 3 遍），读完即停</view>
+    <view class="auto-tip" wx:if="{{learnActive}}">🔄 正在逐个报读（英文 → 中文） · 点「停止学习」可暂停</view>
+
+    <scroll-view class="list-scroll" scroll-y scroll-into-view="{{scrollInto}}">
+      <view class="card list">
+        <view class="word-item {{learnIdx === index ? 'learning' : ''}}" wx:for="{{batch.words}}" wx:key="w" id="w-{{index}}" data-idx="{{index}}" bindtap="tapWord">
+          <text class="word-idx">{{batch.start + index + 1}}</text>
+          <view class="word-main">
+            <text class="word-text">{{item.w}}</text>
+            <text class="word-phonetic" wx:if="{{item.p}}">{{item.p}}</text>
+          </view>
+          <text class="word-meaning">{{item.m}}</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <button class="btn-primary done-btn" bindtap="onDone">完成学习，记入记录</button>
+  </block>
+
+  <view wx:else class="card empty">
+    <view class="empty-icon">🎉</view>
+    <view>{{accountName}} 词库已全部学完（共 {{totalWords}} 词）</view>
+    <view class="text-muted" style="margin-top:12rpx;">可切换其他账号，或在 data/ 目录扩充词库后继续</view>
+  </view>
+</view>

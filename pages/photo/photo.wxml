@@ -1,0 +1,99 @@
+<view class="container">
+  <!-- 入口：拍照 / 相册 -->
+  <block wx:if="{{stage === 'idle'}}">
+    <view class="card intro">
+      <view class="intro-title">📷 拍照收词</view>
+      <view class="text-muted">拍课本 / 练习册，识别印刷体英文单词，自动查询释义后收录到「拍照生词本」，按批次学习并进入 10 次间隔复习。</view>
+      <view class="text-muted intro-tip">适合印刷体单词，手写体识别效果差；建议光线充足、镜头稳定。</view>
+    </view>
+    <view class="card" wx:if="{{vkOk}}">
+      <button class="btn-primary act-btn" data-source="camera" bindtap="choose">拍照识别</button>
+      <button class="btn-plain act-btn" data-source="album" bindtap="choose">从相册选择</button>
+    </view>
+    <view class="card" wx:else>
+      <!-- 鸿蒙：微信鸿蒙端未支持 AI 模块（官方适配指南），专属文案；官方支持后随 ocr.js 预判一并移除 -->
+      <block wx:if="{{ohos}}">
+        <view class="unsupport-title">鸿蒙系统暂不支持拍照识别</view>
+        <view class="text-muted">微信鸿蒙版暂未开放端上 OCR 能力，可换安卓 / iPhone 手机使用拍照收词；背词、复习等其他功能不受影响。</view>
+      </block>
+      <block wx:else>
+        <view class="unsupport-title">当前微信或机型不支持 OCR 识别</view>
+        <view class="text-muted">请把微信升级到最新版本后重试；仍不支持需启用备选识别方案（另行安排）。</view>
+      </block>
+    </view>
+    <view class="vktest-link" bindtap="goVkTest">识别能力验证页（临时）▸</view>
+  </block>
+
+  <!-- 识别中 -->
+  <block wx:if="{{stage === 'recognizing'}}">
+    <view class="card center">
+      <image class="preview" src="{{imageSrc}}" mode="aspectFit" />
+      <view class="text-muted loading-text">正在识别图片中的单词…</view>
+    </view>
+  </block>
+
+  <!-- 勾选候选词 -->
+  <block wx:if="{{stage === 'pick'}}">
+    <view class="card">
+      <view class="list-title">识别到 {{candidates.length}} 个单词（已勾选 {{checkedCount}}）</view>
+      <view class="text-muted hint">灰色「已收录」表示与内置词库重复，不可收录。</view>
+      <view class="cand {{item.known ? 'known' : ''}}" wx:for="{{candidates}}" wx:key="w"
+            data-idx="{{index}}" bindtap="toggle">
+        <view class="cand-check {{item.checked ? 'on' : ''}}">{{item.checked ? '✓' : ''}}</view>
+        <view class="cand-word">{{item.w}}</view>
+        <view class="cand-tag" wx:if="{{item.known}}">已收录</view>
+      </view>
+    </view>
+    <button class="btn-primary act-btn" bindtap="lookupMeanings">查询释义（{{checkedCount}} 词）</button>
+    <button class="btn-plain act-btn" bindtap="again">重新拍照</button>
+  </block>
+
+  <!-- 查义进度 -->
+  <block wx:if="{{stage === 'looking'}}">
+    <view class="card center">
+      <view class="big-num">{{progress.done}}/{{progress.total}}</view>
+      <view class="text-muted">正在查询释义…</view>
+      <view class="progress-bar">
+        <view class="progress-fill" style="width: {{progress.total ? progress.done / progress.total * 100 : 0}}%;"></view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 查义结果与收录 -->
+  <block wx:if="{{stage === 'result'}}">
+    <view class="card">
+      <view class="list-title">查词完成：{{okCount}}/{{entries.length}} 个词有释义</view>
+      <view class="entry" wx:for="{{entries}}" wx:key="w">
+        <view class="entry-head">
+          <view class="entry-word">{{item.w}}</view>
+          <view class="entry-phonic" wx:if="{{item.p}}">[{{item.p}}]</view>
+        </view>
+        <view class="entry-m" wx:if="{{item.ok}}">{{item.m}}</view>
+        <view class="entry-m fail-row" wx:else>
+          <text class="text-muted">待补义</text>
+          <text class="link" data-idx="{{index}}" catchtap="retryOne">重试</text>
+          <text class="link" data-idx="{{index}}" catchtap="editMeaning">手动输入</text>
+        </view>
+      </view>
+    </view>
+    <button class="btn-primary act-btn" bindtap="save">收录 {{okCount}} 词</button>
+    <view class="text-muted pending-tip" wx:if="{{entries.length - okCount > 0}}">
+      {{entries.length - okCount}} 个待补义词暂不收录，可点「重试 / 手动输入」补齐后再收录
+    </view>
+    <button class="btn-plain act-btn" bindtap="again">重新拍照</button>
+  </block>
+
+  <!-- 完成页 -->
+  <block wx:if="{{stage === 'done'}}">
+    <view class="card center">
+      <view class="done-icon">✅</view>
+      <view class="done-title">已收录 {{addedCount}} 个词</view>
+      <view class="text-muted" wx:if="{{entries.length - okCount > 0}}">
+        {{entries.length - okCount}} 个待补义词未收录
+      </view>
+      <view class="text-muted">已加入「拍照生词本」账号，按每批 35 词进入学习与复习。</view>
+      <button class="btn-primary act-btn" bindtap="goStudy">去拍照生词本学习</button>
+      <button class="btn-plain act-btn" bindtap="again">继续拍照收词</button>
+    </view>
+  </block>
+</view>

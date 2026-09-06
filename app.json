@@ -1,0 +1,21 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/new/new",
+    "pages/review/review",
+    "pages/study/study",
+    "pages/history/history",
+    "pages/wrong/wrong",
+    "pages/overview/overview",
+    "pages/photo/photo",
+    "pages/vktest/vktest"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#07c160",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "单词记忆",
+    "backgroundColor": "#f6f7f9"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

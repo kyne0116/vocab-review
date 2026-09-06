@@ -1,0 +1,147 @@
+.hero {
+  text-align: center;
+  padding: 60rpx 0 40rpx;
+}
+.hero-title {
+  font-size: 48rpx;
+  font-weight: bold;
+}
+.hero-sub {
+  margin-top: 12rpx;
+  color: #999;
+  font-size: 26rpx;
+}
+
+.account {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+.account-label {
+  font-size: 22rpx;
+  color: #999;
+}
+.account-name {
+  font-size: 38rpx;
+  font-weight: bold;
+  margin-top: 6rpx;
+}
+.account-desc { margin-top: 6rpx; }
+.account-switch {
+  color: #576b95;
+  font-size: 26rpx;
+  flex-shrink: 0;
+}
+
+.menu {
+  display: flex;
+  gap: 24rpx;
+  margin-bottom: 30rpx;
+}
+.menu-btn {
+  flex: 1;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 40rpx 20rpx;
+  text-align: center;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+.menu-btn.new { border-top: 8rpx solid #07c160; }
+.menu-btn.review { border-top: 8rpx solid #f59a23; }
+.menu-icon { font-size: 60rpx; }
+.menu-name { font-size: 36rpx; font-weight: bold; margin-top: 12rpx; }
+.menu-desc { font-size: 24rpx; color: #999; margin-top: 10rpx; }
+
+.photo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+  border-left: 8rpx solid #576b95;
+}
+.photo-title { font-size: 34rpx; font-weight: bold; }
+.photo-desc { margin-top: 6rpx; }
+.photo-go { color: #576b95; font-size: 32rpx; }
+
+.wrong {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+  border-left: 8rpx solid #e64340;
+}
+.wrong-title { font-size: 34rpx; font-weight: bold; }
+.wrong-desc { margin-top: 6rpx; }
+.wrong-badge {
+  min-width: 64rpx;
+  text-align: center;
+  background: #fff0ef;
+  color: #e64340;
+  font-size: 32rpx;
+  font-weight: bold;
+  border-radius: 40rpx;
+  padding: 10rpx 20rpx;
+}
+.wrong-badge.has { background: #e64340; color: #fff; }
+
+.progress {
+  margin-bottom: 30rpx;
+  border-left: 8rpx solid #07c160;
+}
+.progress-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.progress-title { font-size: 34rpx; font-weight: bold; }
+.progress-count { color: #999; font-size: 24rpx; }
+.progress-bar {
+  height: 16rpx;
+  background: #f0f0f0;
+  border-radius: 10rpx;
+  margin-top: 22rpx;
+  overflow: hidden;
+}
+.progress-fill { height: 100%; background: #07c160; border-radius: 10rpx; }
+.progress-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+/* 批次点阵：全书每批一个圆点，固定四色语义（与教程总览页一致）
+   done(绿实)   = 已学且 10 次复习全部完成
+   learning(橙描边) = 正在复习中
+   current(绿框) = 当前待学批
+   todo(灰)     = 未学 */
+.dot {
+  width: 22rpx;
+  height: 22rpx;
+  border-radius: 50%;
+  background: #e5e5e5; /* todo */
+}
+.dot.done { background: #07c160; }
+.dot.learning { background: #ffe9aa; border: 2rpx solid #f59a23; box-sizing: border-box; }
+.dot.current { background: #fff; border: 3rpx solid #07c160; box-sizing: border-box; }
+.progress-link {
+  margin-top: 20rpx;
+  color: #576b95;
+  font-size: 26rpx;
+  text-align: right;
+}
+
+.stats { margin-top: 10rpx; }
+.stats-row {
+  display: flex;
+  justify-content: space-around;
+  text-align: center;
+}
+.stats-num { font-size: 40rpx; font-weight: bold; color: #07c160; }
+.stats-label { font-size: 24rpx; color: #999; margin-top: 8rpx; }
+.history-link {
+  margin-top: 30rpx;
+  text-align: center;
+  color: #576b95;
+  font-size: 26rpx;
+}

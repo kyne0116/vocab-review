@@ -1,0 +1,29 @@
+<view class="container">
+
+  <!-- 空状态 -->
+  <view wx:if="{{items.length === 0}}" class="card empty">
+    <view class="empty-icon">🎉</view>
+    <view>错词本还是空的</view>
+    <view class="text-muted" style="margin-top:12rpx;">复习时答错的单词会收录到这里，答对后自动移出</view>
+  </view>
+
+  <!-- 错词列表 -->
+  <block wx:else>
+    <view class="card head">
+      <view class="head-title">📕 错词本 · {{total}} 词</view>
+      <view class="head-info text-muted">点单词可朗读；确认已会点「我会了」移出</view>
+    </view>
+
+    <view class="card list">
+      <view class="wl" wx:for="{{items}}" wx:key="word">
+        <view class="wl-left" bindtap="tapWord" data-idx="{{index}}">
+          <view class="wl-word">{{item.word}}</view>
+          <view class="wl-mean">{{item.meaning}}</view>
+          <view class="wl-batch text-muted">来源：{{item.batchText}}</view>
+        </view>
+        <view class="wl-btn" catchtap="onKnow" data-idx="{{index}}">我会了 ✓</view>
+      </view>
+    </view>
+  </block>
+
+</view>

@@ -1,0 +1,54 @@
+<view class="container">
+  <view class="card top">
+    <view class="top-title">{{accName}} · 全书 {{totalBatches}} 批 / {{totalWords}} 词</view>
+    <view class="progress"><view class="progress-fill" style="width: {{pct}}%;"></view></view>
+    <view class="dots-row">
+      <view class="dot {{item.cls}}" wx:for="{{batchDots}}" wx:key="index"></view>
+    </view>
+    <view class="top-sub">已学 {{learned}} 词 · 还剩 {{remaining}} 词 · 当前第 {{currentBatchNo}} 批</view>
+  </view>
+
+  <view class="card batch" wx:for="{{batches}}" wx:key="batchNo" wx:for-item="b" wx:for-index="bi">
+    <view class="batch-head" bindtap="toggle" data-i="{{bi}}">
+      <view class="bh-left">
+        <view class="bh-title">第 {{b.batchNo}} 批 · {{b.rangeText}}（{{b.count}} 词）</view>
+        <view class="bh-sub">
+          <text class="state {{b.stateCls}}">{{b.stateText}}</text>
+          <text wx:if="{{b.isLearned}}" class="review-text">复习 {{b.reviewsDone}}/{{b.rounds}}</text>
+          <text wx:if="{{b.hasWrong}}" class="wrong-tag">{{b.wrongCount}} 需巩固</text>
+        </view>
+      </view>
+      <view class="bh-right">
+        <view class="ops">
+          <text wx:if="{{b.isCurrent}}" class="op" catchtap="goNew">去学习 ▸</text>
+          <text wx:elif="{{!b.isLearned}}" class="op dim" catchtap="notYet">未轮到</text>
+          <text wx:if="{{b.isLearning}}" class="op" catchtap="goReview" data-id="{{b.batchId}}">复习 ▸</text>
+          <text wx:if="{{b.isLearned}}" class="op act" catchtap="goStudy" data-id="{{b.batchId}}">重学 ▸</text>
+        </view>
+        <view class="arrow">{{b.open ? '收起 ▲' : '展开 ▼'}}</view>
+      </view>
+    </view>
+
+    <block wx:if="{{b.open}}">
+      <view class="hr"></view>
+      <view class="reviews-dots" wx:if="{{b.isLearned}}">
+        <text wx:for="{{b.dots}}" wx:key="index" class="rd {{item.done ? 'on' : ''}}"></text>
+        <text class="rd-label" wx:if="{{b.isLearned}}">3遍学习+10次间隔复习 · 已完成第{{b.reviewsDone}}/10次</text>
+      </view>
+      <view class="hr" wx:if="{{b.isLearned}}"></view>
+      <view class="word-item" wx:for="{{b.words}}" wx:key="w">
+        <text class="w">{{item.w}}</text>
+        <text class="m">{{item.m}}</text>
+      </view>
+      <view class="hr" wx:if="{{b.isLearned}}"></view>
+      <block wx:if="{{b.isLearned}}">
+        <view class="rh" wx:for="{{b.reviewHistory}}" wx:key="round">
+          第{{item.round}}次 · {{item.date}} · 共{{item.total}}词，错{{item.wrong}}词
+        </view>
+      </block>
+      <view class="rw" wx:if="{{b.hasWrong}}">本批遗忘池 {{b.wrongCount}} 词 · 会进入错词本并在后续轮次再考</view>
+      <view class="rw text-muted" wx:if="{{b.isLearned && b.reviewsDone === 0}}">已学习 · 第 1 天起开始 10 次间隔复习</view>
+      <view class="rw text-muted" wx:if="{{!b.isLearned}}">尚未学习 · 轮到你时上方的「去学习」会带你去学这一批</view>
+    </block>
+  </view>
+</view>

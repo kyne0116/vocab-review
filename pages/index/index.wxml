@@ -1,0 +1,75 @@
+<view class="container">
+  <view class="hero">
+    <view class="hero-title">单词记忆</view>
+    <view class="hero-sub">新词学习 · 10次间隔复习</view>
+  </view>
+
+  <view class="card account" bindtap="onSwitchAccount">
+    <view class="account-left">
+      <view class="account-label">当前账号</view>
+      <view class="account-name">{{accountName}}</view>
+      <view class="account-desc text-muted">{{accountDesc}}</view>
+    </view>
+    <view class="account-switch">切换账号 ▸</view>
+  </view>
+
+  <view class="menu">
+    <view class="menu-btn new" bindtap="goNew">
+      <view class="menu-icon">📖</view>
+      <view class="menu-name">新单词</view>
+      <view class="menu-desc">每批 {{batchSize}} 个，按词库顺序</view>
+    </view>
+    <view class="menu-btn review" bindtap="goReview">
+      <view class="menu-icon">🔁</view>
+      <view class="menu-name">复习</view>
+      <view class="menu-desc" wx:if="{{dueCount > 0}}">今天待复习 {{todayItems}} 词</view>
+      <view class="menu-desc" wx:else>今天暂无复习任务</view>
+    </view>
+  </view>
+
+  <view class="card photo" bindtap="goPhoto">
+    <view class="photo-left">
+      <view class="photo-title">📷 拍照收词</view>
+      <view class="photo-desc text-muted">拍课本 / 练习册，识别单词、查义后收录到拍照生词本</view>
+    </view>
+    <view class="photo-go">▸</view>
+  </view>
+
+  <view class="card wrong" bindtap="goWrong">
+    <view class="wrong-left">
+      <view class="wrong-title">📕 错词本</view>
+      <view class="wrong-desc text-muted">复习答错的单词集中在这里，会了就移出</view>
+    </view>
+    <view class="wrong-badge {{wrongCount > 0 ? 'has' : ''}}">{{wrongCount}}</view>
+  </view>
+
+  <view class="card progress" bindtap="goOverview">
+    <view class="progress-top">
+      <view class="progress-title">🗺 教程进度</view>
+      <view class="progress-count">全书 {{overviewCount}} 批 / {{totalWords}} 词</view>
+    </view>
+    <view class="progress-bar"><view class="progress-fill" style="width: {{overviewPct}}%;"></view></view>
+    <view class="progress-dots">
+      <view class="dot {{item.cls}}" wx:for="{{batchDots}}" wx:key="index"></view>
+    </view>
+    <view class="progress-link">已学 {{learned}} 词 · 查看教程总览 ▸</view>
+  </view>
+
+  <view class="card stats">
+    <view class="stats-row">
+      <view class="stats-item">
+        <view class="stats-num">{{learned}}</view>
+        <view class="stats-label">已学单词</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-num">{{batches}}</view>
+        <view class="stats-label">已学批次</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-num">{{totalWords}}</view>
+        <view class="stats-label">词库总量</view>
+      </view>
+    </view>
+    <view class="history-link" bindtap="goHistory">查看学习记录（日期与内容）→</view>
+  </view>
+</view>
