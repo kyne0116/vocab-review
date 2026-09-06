@@ -1,6 +1,7 @@
 // OCR provider：微信 VisionKit 端上静态图识别（ADR-001 主路线，R02=A 已拍板）
 // 免 Key、免认证、图片不出设备；识别不达标时以相同接口签名切换备选 provider（百度 OCR）。
-// 流程：图片路径 → 离屏 canvas 绘制并压缩（长边上限 MAX_EDGE）→ getImageData(RGBA)
+// 流程：图片路径 → 按版面分块（每块长边上限 MAX_EDGE，边界有少量重叠）
+//       → 离屏 canvas 绘制并压缩 → getImageData(RGBA)
 //       → VKSession(track.OCR mode 2) runOCR → updateAnchors 事件返回 VKOCRAnchor[].text
 // 注意：VKSession 在开发者工具模拟器不可用，OCR 链路必须真机验证（F6/F7）。
 // F6 教训（2026-09-06）：wx.isVKSupport 参数是 VK 版本 'v1'/'v2'，不是能力名——
@@ -9,10 +10,14 @@
 // errno=2003000 教训（2026-09-06，官方 VKSession.start 码表）：2003000=会话不可用，
 // 相机权限另有专用码 2003001/2003002；处置 = 相机 scope 预检 + 启动失败销毁重建会话重试。
 
-const MAX_EDGE = 1280;   // 压缩后长边上限（控制内存与识别耗时）
-const RUN_TIMEOUT = 10000; // runOCR 后等待 updateAnchors 事件的超时（毫秒）
+const MAX_EDGE = 1280;   // 单块长边上限（控制内存与识别耗时）
+const TILE_OVERLAP = 48; // 分块重叠，避免边界处切断单词
+const RUN_TIMEOUT = 6000;  // 单块 runOCR 等待 updateAnchors 的超时（毫秒）
+const RECOGNIZE_TIMEOUT = 25000; // 整张图片识别总时限，避免多块累计后长时间无反馈
+const IMAGE_LOAD_TIMEOUT = 5000; // 单块图片解码 / canvas 读取超时
 const START_ATTEMPTS = 2;  // 会话启动尝试次数（首启 + 销毁重建重试 1 次）
 const RETRY_DELAY = 300;   // 两次启动尝试间隔（毫秒），留时间给引擎回收
+const START_TIMEOUT = 8000; // start 回调未返回时的单次启动上限
 
 // 官方 VKSession.start 回调 status 码表（developers.weixin.qq.com VKSession.start 页）
 const ERRNO_DESC = {
@@ -59,15 +64,6 @@ function supported() {
   return !!(wx.isVKSupport('v1') || wx.isVKSupport('v2'));
 }
 
-// 验证页展示用：基础库版本 + v1/v2 检测结果
-function vkInfo() {
-  return {
-    sdk: sdkVersion(),
-    v1: !!(wx.isVKSupport && wx.isVKSupport('v1')),
-    v2: !!(wx.isVKSupport && wx.isVKSupport('v2'))
-  };
-}
-
 // 鸿蒙端检测（方案1 拍板 2026-09-06）：官方《HarmonyOS 适配指南》指定判据 platform === 'ohos'，
 // 真机 system 实测为 "OpenHarmony(OS) X.Y" 前缀；开发者工具模拟鸿蒙时 platform 为 devtools、system == 'HarmonyOS'。
 // 鸿蒙微信未实现 AI 模块（官方接口支持表），VK OCR 会话必失败（F6 六/七轮双机实测 2003000）；
@@ -83,6 +79,7 @@ function ohos() {
 
 let session = null;
 let pending = null; // { resolve, timer }：本次 runOCR 等待 updateAnchors 的挂起项
+let recognizeQueue = Promise.resolve(); // VKSession 单会话串行化，避免连续选图互相覆盖 pending
 
 function linesFrom(anchors) {
   return (anchors || []).map(function (x) { return (x.text || '').trim(); })
@@ -90,13 +87,17 @@ function linesFrom(anchors) {
 }
 
 function createSession() {
-  session = wx.createVKSession({ track: { OCR: { mode: 2 } } });
+  const currentSession = wx.createVKSession({ track: { OCR: { mode: 2 } } });
+  session = currentSession;
   // 官方静态图模式：每调一次 runOCR 触发一次 updateAnchors 事件
-  session.on('updateAnchors', function (anchors) {
+  currentSession.on('updateAnchors', function (anchors) {
+    if (session !== currentSession) return;
     if (!pending) return;
     const p = pending; pending = null;
     clearTimeout(p.timer);
-    p.resolve(linesFrom(anchors));
+    const lines = linesFrom(anchors);
+    console.log('[OCR] 收到结果：' + lines.length + ' 行，耗时 ' + (Date.now() - p.t0) + 'ms');
+    p.resolve(lines);
   });
   return session;
 }
@@ -143,9 +144,30 @@ let started = false;
 function attemptStart(attempt) {
   return new Promise(function (resolve, reject) {
     // 官方签名 start(errno => ...)：失败返回 errno 数字，成功返回 null
+    let settled = false;
+    const timer = setTimeout(function () {
+      if (settled) return;
+      settled = true;
+      console.log('[OCR] 会话启动超时，准备重建');
+      destroySession();
+      if (attempt < START_ATTEMPTS) {
+        return setTimeout(function () {
+          attemptStart(attempt + 1).then(resolve, reject);
+        }, RETRY_DELAY);
+      }
+      reject(new Error('VKSession 启动超时，请重启微信后重试'));
+    }, START_TIMEOUT);
     getSession().start(function (errno) {
-      if (!errno) { started = true; return resolve(); }
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (!errno) {
+        started = true;
+        console.log('[OCR] 会话启动成功');
+        return resolve();
+      }
       const n = (errno && typeof errno === 'object') ? errno.errMsg : errno;
+      console.log('[OCR] 启动失败 errno=', n);
       if (attempt < START_ATTEMPTS) {
         // 会话级失败（如 2003000 会话不可用）常见于偶发初始化失败：销毁重建后重试
         destroySession();
@@ -166,63 +188,151 @@ function ensureStart() {
   });
 }
 
-// 图片 → 压缩后的像素数据 { data: ArrayBuffer, width, height }
-function loadImageData(src) {
+function getImageInfo(src) {
   return new Promise(function (resolve, reject) {
     wx.getImageInfo({
       src: src,
-      success: function (info) {
-        const scale = Math.min(1, MAX_EDGE / Math.max(info.width, info.height));
-        const w = Math.round(info.width * scale);
-        const h = Math.round(info.height * scale);
-        const canvas = wx.createOffscreenCanvas({ type: '2d', width: w, height: h });
-        const ctx = canvas.getContext('2d');
-        const img = canvas.createImage();
-        img.onload = function () {
-          ctx.drawImage(img, 0, 0, w, h);
-          const d = ctx.getImageData(0, 0, w, h);
-          resolve({ data: d.data.buffer, width: w, height: h });
-        };
-        img.onerror = function () { reject(new Error('图片加载失败')); };
-        img.src = src;
-      },
+      success: resolve,
       fail: function (e) { reject(new Error('读取图片失败：' + (e && e.errMsg))); }
     });
   });
 }
 
+// 将超宽/超高图片切成带少量重叠的块；每块独立 OCR，避免整页缩小后跨栏粘连。
+function regionsFor(width, height) {
+  if (width <= MAX_EDGE && height <= MAX_EDGE) {
+    return [{ x: 0, y: 0, width: width, height: height }];
+  }
+  // 宽版词表通常按列排词；块宽收紧到图高的约 85%，尽量保证一块只含一列。
+  // 上下限避免普通横图被切得过碎，也避免超长横幅整行粘连。
+  const maxTileWidth = Math.min(MAX_EDGE, Math.max(480, Math.round(height * 0.85)));
+  const maxTileHeight = Math.min(MAX_EDGE, Math.max(480, Math.round(width * 0.85)));
+  const cols = Math.max(1, Math.ceil(width / maxTileWidth));
+  const rows = Math.max(1, Math.ceil(height / maxTileHeight));
+  const out = [];
+  for (let row = 0; row < rows; row++) {
+    const y = Math.floor(row * height / rows);
+    const y2 = Math.ceil((row + 1) * height / rows);
+    for (let col = 0; col < cols; col++) {
+      const x = Math.floor(col * width / cols);
+      const x2 = Math.ceil((col + 1) * width / cols);
+      out.push({
+        x: Math.max(0, x - (col ? TILE_OVERLAP : 0)),
+        y: Math.max(0, y - (row ? TILE_OVERLAP : 0)),
+        width: Math.min(width, x2 + (col < cols - 1 ? TILE_OVERLAP : 0)) - Math.max(0, x - (col ? TILE_OVERLAP : 0)),
+        height: Math.min(height, y2 + (row < rows - 1 ? TILE_OVERLAP : 0)) - Math.max(0, y - (row ? TILE_OVERLAP : 0))
+      });
+    }
+  }
+  return out;
+}
+
+// 图片区域 → 压缩后的像素数据 { data: ArrayBuffer, width, height }
+function loadImageData(src, region) {
+  return new Promise(function (resolve, reject) {
+    let settled = false;
+    const timer = setTimeout(function () {
+      if (settled) return;
+      settled = true;
+      const err = new Error('图片处理超时，请重试');
+      err.code = 'OCR_IMAGE_TIMEOUT';
+      reject(err);
+    }, IMAGE_LOAD_TIMEOUT);
+    const scale = Math.min(1, MAX_EDGE / Math.max(region.width, region.height));
+    const w = Math.max(1, Math.round(region.width * scale));
+    const h = Math.max(1, Math.round(region.height * scale));
+    const canvas = wx.createOffscreenCanvas({ type: '2d', width: w, height: h });
+    const ctx = canvas.getContext('2d');
+    const img = canvas.createImage();
+    img.onload = function () {
+      if (settled) return;
+      ctx.drawImage(img, region.x, region.y, region.width, region.height, 0, 0, w, h);
+      const d = ctx.getImageData(0, 0, w, h);
+      settled = true;
+      clearTimeout(timer);
+      resolve({ data: d.data.buffer, width: w, height: h });
+    };
+    img.onerror = function () {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(new Error('图片加载失败'));
+    };
+    img.src = src;
+  });
+}
+
+function recognizeFrame(img) {
+  return new Promise(function (resolve, reject) {
+    console.log('[OCR] runOCR 已派发：' + img.width + 'x' + img.height);
+    pending = {
+      resolve: resolve,
+      t0: Date.now(),
+      timer: setTimeout(function () {
+        if (pending) {
+          pending = null;
+          console.log('[OCR] 超时：' + RUN_TIMEOUT + 'ms 未收到 updateAnchors，已重置会话');
+          destroySession();
+          const err = new Error('OCR 超时（未收到识别结果）');
+          err.code = 'OCR_TIMEOUT';
+          reject(err);
+        }
+      }, RUN_TIMEOUT)
+    };
+    const currentSession = getSession();
+    currentSession.runOCR(
+      { frameBuffer: img.data, width: img.width, height: img.height },
+      function (a, b) {
+        if (session !== currentSession) return;
+        const anchors = Array.isArray(a) ? a : (Array.isArray(b) ? b : null);
+        if (!anchors || !pending) return;
+        const p = pending; pending = null;
+        clearTimeout(p.timer);
+        p.resolve(linesFrom(anchors));
+      }
+    );
+  });
+}
+
 // 识别静态图：imageSrc 为本地临时文件路径，返回识别文本行数组
-function recognize(imageSrc) {
-  return loadImageData(imageSrc).then(function (img) {
-    return ensureStart().then(function () {
-      return new Promise(function (resolve, reject) {
-        pending = {
-          resolve: resolve,
-          timer: setTimeout(function () {
-            if (pending) { pending = null; reject(new Error('OCR 超时（未收到识别结果）')); }
-          }, RUN_TIMEOUT)
-        };
-        getSession().runOCR(
-          { frameBuffer: img.data, width: img.width, height: img.height },
-          function (a, b) {
-            // 官方 runOCR 无回调参数，结果走 updateAnchors；保留兼容分支以防个别版本回调返回 anchors
-            const anchors = Array.isArray(a) ? a : (Array.isArray(b) ? b : null);
-            if (!anchors || !pending) return;
-            const p = pending; pending = null;
-            clearTimeout(p.timer);
-            p.resolve(linesFrom(anchors));
+function recognize(imageSrc, onProgress) {
+  function run() {
+    return getImageInfo(imageSrc).then(function (info) {
+      const regions = regionsFor(info.width, info.height);
+      const deadline = Date.now() + RECOGNIZE_TIMEOUT;
+      return ensureStart().then(function () {
+        const lines = [];
+        let lastError = null;
+        function next(i) {
+          if (i >= regions.length || Date.now() >= deadline) {
+            if (lines.length) return Promise.resolve(lines);
+            return Promise.reject(lastError || new Error('OCR 未在限定时间内返回结果，请调整图片后重试'));
           }
-        );
+          if (onProgress) onProgress(i + 1, regions.length);
+          return loadImageData(imageSrc, regions[i]).then(recognizeFrame).then(function (part) {
+            part.forEach(function (line) { lines.push(line); });
+            return next(i + 1);
+          }).catch(function (err) {
+            // 某一块未返回事件时继续尝试后续区域；已有结果仍可正常进入候选页。
+            if (!err || err.code !== 'OCR_TIMEOUT') throw err;
+            lastError = err;
+            console.log('[OCR] 跳过超时分块：' + (i + 1) + '/' + regions.length);
+            return ensureStart().then(function () { return next(i + 1); });
+          });
+        }
+        return next(0);
       });
     });
-  });
+  }
+  const queued = recognizeQueue.then(run, run);
+  recognizeQueue = queued.catch(function () { /* 当前请求失败不阻塞下一张图 */ });
+  return queued;
 }
 
 module.exports = {
   MAX_EDGE: MAX_EDGE,
   ERRNO_DESC: ERRNO_DESC,
   supported: supported,
-  vkInfo: vkInfo,
   ohos: ohos,
   recognize: recognize
 };

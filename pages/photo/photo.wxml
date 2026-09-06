@@ -21,14 +21,13 @@
         <view class="text-muted">请把微信升级到最新版本后重试；仍不支持需启用备选识别方案（另行安排）。</view>
       </block>
     </view>
-    <view class="vktest-link" bindtap="goVkTest">识别能力验证页（临时）▸</view>
   </block>
 
   <!-- 识别中 -->
   <block wx:if="{{stage === 'recognizing'}}">
     <view class="card center">
       <image class="preview" src="{{imageSrc}}" mode="aspectFit" />
-      <view class="text-muted loading-text">正在识别图片中的单词…</view>
+      <view class="text-muted loading-text">{{recognizeHint}}</view>
     </view>
   </block>
 

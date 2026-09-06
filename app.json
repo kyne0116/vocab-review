@@ -7,8 +7,7 @@
     "pages/history/history",
     "pages/wrong/wrong",
     "pages/overview/overview",
-    "pages/photo/photo",
-    "pages/vktest/vktest"
+    "pages/photo/photo"
   ],
   "window": {
     "navigationBarBackgroundColor": "#07c160",

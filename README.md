@@ -206,7 +206,6 @@ vocab-review-miniprogram/
 ├── pages/wrong/                    错词本页（错词聚合列表 + 点词朗读 + 「我会了」移出）
 ├── pages/overview/                 教程总览页（整库按批分章，状态徽标+每批单词展开）
 ├── pages/photo/                    拍照收词页（拍照/选图→识别→勾选→查义→收录拍照生词本）
-├── pages/vktest/                   VK OCR 识别能力验证页（F6 临时验证用，真机验证完成后移除）
 ├── AGENTS.md                       AI 编码代理项目主规则（唯一规则真相源，Claude Code / Codex 通用）
 ├── CLAUDE.md                       Claude Code 入口桥接（不承载规则）
 ├── docs/                           开发文档：产品方案 / 技术选型 / ADR / 开发过程 / 运维手册（地图见 docs/README.md）

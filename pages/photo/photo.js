@@ -12,6 +12,7 @@ Page({
     vkOk: true,        // 当前环境是否可进入识别流程（不支持或鸿蒙端为 false）
     ohos: false,       // 鸿蒙端（微信未支持 AI 模块，入口降级提示；方案1 拍板 2026-09-06）
     imageSrc: '',      // 本次识别的图片（预览用）
+    recognizeHint: '正在识别图片中的单词…',
     candidates: [],    // [{ w, known, checked }]，known=命中内置词库（R04：标灰不可勾选）
     checkedCount: 0,
     progress: { done: 0, total: 0 },
@@ -33,7 +34,8 @@ Page({
       count: 1,
       mediaType: ['image'],
       sourceType: [source],
-      sizeType: ['compressed'],
+      // 保留原图，OCR 层按版面分块压缩；直接使用 compressed 会先损失小字细节
+      sizeType: ['original'],
       success: function (res) {
         that.recognizeImage(res.tempFiles[0].tempFilePath);
       },
@@ -52,8 +54,14 @@ Page({
 
   recognizeImage: function (src) {
     const that = this;
-    this.setData({ stage: 'recognizing', imageSrc: src });
-    ocr.recognize(src).then(function (lines) {
+    const requestId = (this._recognizeId || 0) + 1;
+    this._recognizeId = requestId;
+    this.setData({ stage: 'recognizing', imageSrc: src, recognizeHint: '正在准备图片…' });
+    ocr.recognize(src, function (current, total) {
+      if (that._recognizeId !== requestId) return;
+      that.setData({ recognizeHint: '正在识别第 ' + current + '/' + total + ' 个区域…' });
+    }).then(function (lines) {
+      if (that._recognizeId !== requestId) return;
       const candidates = parser.buildCandidates(lines, junior.concat(primary), store.getPhotoBank())
         .map(function (c) { return { w: c.w, known: c.known, checked: !c.known }; });
       if (!candidates.length) {
@@ -71,6 +79,7 @@ Page({
         checkedCount: candidates.filter(function (c) { return c.checked; }).length
       });
     }).catch(function (err) {
+      if (that._recognizeId !== requestId) return;
       that.setData({ stage: 'idle', imageSrc: '' });
       wx.showModal({ title: '识别失败', content: (err && err.message) || '请重试', showCancel: false });
     });
@@ -161,11 +170,10 @@ Page({
   },
 
   again: function () {
+    this._recognizeId = (this._recognizeId || 0) + 1;
     this.setData({
-      stage: 'idle', imageSrc: '', candidates: [], checkedCount: 0,
+      stage: 'idle', imageSrc: '', recognizeHint: '正在识别图片中的单词…', candidates: [], checkedCount: 0,
       progress: { done: 0, total: 0 }, entries: [], okCount: 0, addedCount: 0
     });
-  },
-
-  goVkTest: function () { wx.navigateTo({ url: '/pages/vktest/vktest' }); }
+  }
 });

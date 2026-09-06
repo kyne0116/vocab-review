@@ -20,12 +20,6 @@
   color: #e64340;
   margin-bottom: 10rpx;
 }
-.vktest-link {
-  text-align: center;
-  color: #999;
-  font-size: 24rpx;
-  margin-top: 40rpx;
-}
 
 .list-title {
   font-size: 32rpx;
