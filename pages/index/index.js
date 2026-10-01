@@ -13,10 +13,22 @@ Page({
     wrongCount: 0,
     overviewCount: 0,
     overviewPct: 0,
-    batchDots: []
+    batchDots: [],
+    versionLine: ''
   },
   onShow: function () {
     this.refresh();
+    this.setData({ versionLine: this.buildVersionLine() });
+  },
+  // 首页底部版本行：代码内镜像版本号（上传时同步修改 app.js）+ 运行渠道（开发/体验/正式版）
+  buildVersionLine: function () {
+    const g = getApp().globalData;
+    let envText = '';
+    try {
+      const env = wx.getAccountInfoSync().miniProgram.envVersion;
+      envText = { develop: '开发版', trial: '体验版', release: '正式版' }[env] || '';
+    } catch (e) { /* 低版本基础库无此 API，仅省略渠道 */ }
+    return 'v' + g.appVersion + '（' + g.releaseTime + '）' + (envText ? ' · ' + envText : '');
   },
   refresh: function () {
     const s = store.getStats();

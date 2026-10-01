@@ -72,4 +72,6 @@
     </view>
     <view class="history-link" bindtap="goHistory">查看学习记录（日期与内容）→</view>
   </view>
+
+  <view class="version-line">{{versionLine}}</view>
 </view>

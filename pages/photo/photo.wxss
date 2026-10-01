@@ -27,6 +27,16 @@
 }
 .hint { margin: 10rpx 0 20rpx; }
 
+/* 候选页粘连串提示：识别到超长连串文字（>16 字母，已被过滤）时提醒结果可能不完整 */
+.glue-tip {
+  background: #fff7e6;
+  color: #e64340;
+  font-size: 26rpx;
+  border-radius: 10rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 16rpx;
+}
+
 /* 候选词行：known=内置命中（R04 标灰禁选） */
 .cand {
   display: flex;
@@ -50,6 +60,9 @@
 }
 .cand-check.on { background: #07c160; border-color: #07c160; }
 .cand-word { font-size: 32rpx; }
+/* 候选行主体：词 + AI 自评注记子行（R06-A①） */
+.cand-main { flex: 1; min-width: 0; }
+.cand-note { font-size: 22rpx; color: #999; margin-top: 4rpx; }
 .cand-tag {
   margin-left: auto;
   background: #f0f0f0;
@@ -89,6 +102,8 @@
 .entry-m { margin-top: 8rpx; font-size: 28rpx; color: #333; }
 .fail-row { display: flex; align-items: center; gap: 24rpx; }
 .link { color: #576b95; font-size: 26rpx; }
+/* R06：AUTO_FIX 自动拉取的 AI 纠错建议（仅展示，点「改用」生效） */
+.fix-sug { margin-top: 8rpx; font-size: 24rpx; color: #576b95; }
 .pending-tip { text-align: center; margin-top: 4rpx; }
 
 .done-icon { font-size: 90rpx; }

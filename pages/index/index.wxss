@@ -145,3 +145,11 @@
   color: #576b95;
   font-size: 26rpx;
 }
+
+/* 首页底部版本行（上传版本号镜像，app.js 同步维护） */
+.version-line {
+  text-align: center;
+  color: #bbb;
+  font-size: 22rpx;
+  padding: 16rpx 0 30rpx;
+}

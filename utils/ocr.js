@@ -1,6 +1,7 @@
 // OCR provider：微信 VisionKit 端上静态图识别（ADR-001 主路线，R02=A 已拍板）
 // 免 Key、免认证、图片不出设备；识别不达标时以相同接口签名切换备选 provider（百度 OCR）。
-// 流程：图片路径 → 按版面分块（每块长边上限 MAX_EDGE，边界有少量重叠）
+// 流程：图片路径 → 小图按短边放大（长边 ≤ MAX_EDGE 的压缩/截图副本，封顶 MAX_UPSCALE）
+//       → 按版面分块（以放大后的有效尺寸计算，每块长边上限 MAX_EDGE，边界有少量重叠）
 //       → 离屏 canvas 绘制并压缩 → getImageData(RGBA)
 //       → VKSession(track.OCR mode 2) runOCR → updateAnchors 事件返回 VKOCRAnchor[].text
 // 注意：VKSession 在开发者工具模拟器不可用，OCR 链路必须真机验证（F6/F7）。
@@ -11,6 +12,8 @@
 // 相机权限另有专用码 2003001/2003002；处置 = 相机 scope 预检 + 启动失败销毁重建会话重试。
 
 const MAX_EDGE = 1280;   // 单块长边上限（控制内存与识别耗时）
+const MIN_SHORT_EDGE = 640; // 小图放大目标短边：压缩/截图副本字高不足（963×246 词表图实测字高仅 ~9px，全图漏出 1 词），拉大后回到可识别区间
+const MAX_UPSCALE = 3;   // 放大上限：超过后插值增益有限，耗时与内存反而上涨
 const TILE_OVERLAP = 48; // 分块重叠，避免边界处切断单词
 const RUN_TIMEOUT = 6000;  // 单块 runOCR 等待 updateAnchors 的超时（毫秒）
 const RECOGNIZE_TIMEOUT = 25000; // 整张图片识别总时限，避免多块累计后长时间无反馈
@@ -84,6 +87,12 @@ let recognizeQueue = Promise.resolve(); // VKSession 单会话串行化，避免
 function linesFrom(anchors) {
   return (anchors || []).map(function (x) { return (x.text || '').trim(); })
     .filter(function (t) { return t; });
+}
+
+// 日志用：识别文本原文摘要（JSON 序列化保留换行/空格原貌，超长截断并标注总长）
+function briefText(lines) {
+  const s = JSON.stringify(lines);
+  return s.length > 600 ? s.slice(0, 600) + '…(共 ' + s.length + ' 字符)' : s;
 }
 
 function createSession() {
@@ -198,7 +207,17 @@ function getImageInfo(src) {
   });
 }
 
+// 小图放大倍数：长边 ≤ MAX_EDGE 且短边不足 MIN_SHORT_EDGE 时按短边补齐，封顶 MAX_UPSCALE；
+// 大图（长边 > MAX_EDGE）返回 1，走原有降采样分块路径，不对已清晰的原图做无谓放大。
+// 例：963×246 词表截图 → ×2.6 ≈ 2504×640，字高 ~9px → ~22px，且放大后触发按列分块。
+function upscaleFor(width, height) {
+  if (Math.max(width, height) > MAX_EDGE) return 1;
+  return Math.min(MAX_UPSCALE, Math.max(1, MIN_SHORT_EDGE / Math.min(width, height)));
+}
+
 // 将超宽/超高图片切成带少量重叠的块；每块独立 OCR，避免整页缩小后跨栏粘连。
+// 入参为「有效尺寸」（= 原图尺寸 × upscaleFor 倍数）：小图放大后若超过 MAX_EDGE，
+// 自然进入分块路径，无需单独的小图版式规则。
 function regionsFor(width, height) {
   if (width <= MAX_EDGE && height <= MAX_EDGE) {
     return [{ x: 0, y: 0, width: width, height: height }];
@@ -228,7 +247,8 @@ function regionsFor(width, height) {
 }
 
 // 图片区域 → 压缩后的像素数据 { data: ArrayBuffer, width, height }
-function loadImageData(src, region) {
+// region 坐标基于放大后的有效尺寸，绘制时按 upscale 映射回源图坐标
+function loadImageData(src, region, upscale) {
   return new Promise(function (resolve, reject) {
     let settled = false;
     const timer = setTimeout(function () {
@@ -243,10 +263,16 @@ function loadImageData(src, region) {
     const h = Math.max(1, Math.round(region.height * scale));
     const canvas = wx.createOffscreenCanvas({ type: '2d', width: w, height: h });
     const ctx = canvas.getContext('2d');
+    try { ctx.imageSmoothingQuality = 'high'; } catch (e) { /* 低版本基础库忽略，退回默认插值 */ }
     const img = canvas.createImage();
     img.onload = function () {
       if (settled) return;
-      ctx.drawImage(img, region.x, region.y, region.width, region.height, 0, 0, w, h);
+      const u = upscale || 1;
+      const sx = Math.max(0, Math.round(region.x / u));
+      const sy = Math.max(0, Math.round(region.y / u));
+      const sw = Math.min(img.width - sx, region.width / u);
+      const sh = Math.min(img.height - sy, region.height / u);
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
       const d = ctx.getImageData(0, 0, w, h);
       settled = true;
       clearTimeout(timer);
@@ -298,7 +324,11 @@ function recognizeFrame(img) {
 function recognize(imageSrc, onProgress) {
   function run() {
     return getImageInfo(imageSrc).then(function (info) {
-      const regions = regionsFor(info.width, info.height);
+      const upscale = upscaleFor(info.width, info.height);
+      const effW = Math.round(info.width * upscale);
+      const effH = Math.round(info.height * upscale);
+      const regions = regionsFor(effW, effH);
+      console.log('[OCR] 源图 ' + info.width + 'x' + info.height + '，放大 ' + upscale.toFixed(2) + ' 倍 → ' + effW + 'x' + effH + '，分 ' + regions.length + ' 块');
       const deadline = Date.now() + RECOGNIZE_TIMEOUT;
       return ensureStart().then(function () {
         const lines = [];
@@ -309,7 +339,9 @@ function recognize(imageSrc, onProgress) {
             return Promise.reject(lastError || new Error('OCR 未在限定时间内返回结果，请调整图片后重试'));
           }
           if (onProgress) onProgress(i + 1, regions.length);
-          return loadImageData(imageSrc, regions[i]).then(recognizeFrame).then(function (part) {
+          return loadImageData(imageSrc, regions[i], upscale).then(recognizeFrame).then(function (part) {
+            // 诊断日志（真机回传定性用，定案后随其余 [OCR] 日志一并移除）：打印每块识别文本原文
+            console.log('[OCR] 块 ' + (i + 1) + '/' + regions.length + ' 识别文本：' + briefText(part));
             part.forEach(function (line) { lines.push(line); });
             return next(i + 1);
           }).catch(function (err) {
@@ -331,8 +363,12 @@ function recognize(imageSrc, onProgress) {
 
 module.exports = {
   MAX_EDGE: MAX_EDGE,
+  MIN_SHORT_EDGE: MIN_SHORT_EDGE,
+  MAX_UPSCALE: MAX_UPSCALE,
   ERRNO_DESC: ERRNO_DESC,
   supported: supported,
   ohos: ohos,
+  upscaleFor: upscaleFor,   // 以下两函数导出供 L1 测试（纯函数，不依赖 wx）
+  regionsFor: regionsFor,
   recognize: recognize
 };

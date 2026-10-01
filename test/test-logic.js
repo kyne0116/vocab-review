@@ -368,6 +368,48 @@ eq(parser.buildCandidates(['excuse me'], builtIn12, photo12),
   [{ w: 'excuse', known: false }, { w: 'me', known: false }],
   'v1 单词粒度（R03=A）：短语按单词提取');
 
+// gluedCount / gluedList：被 MAX_LETTERS 过滤的超长粘连串计数与原文（拍照页提示 + [OCR] 日志回传依据）
+eq(parser.gluedCount('congratulations oaskolongotrybecomeokeepoliveoeveny'), 1, '粘连串计数：超16字母计1、正常词不计');
+eq(parser.gluedCount(['odialogueohonorschedule', 'ue']), 1, '数组入参逐行计数、短碎片不计');
+eq(parser.gluedCount('hello world'), 0, '无粘连串返回0');
+eq(parser.gluedCount(null), 0, 'null 安全');
+eq(parser.gluedList('congratulations oaskolongotrybecomeokeepoliveoeveny'), ['oaskolongotrybecomeokeepoliveoeveny'], '粘连串原文列表');
+eq(parser.gluedList(['odialogueohonorschedule', 'ue']), ['odialogueohonorschedule'], '列表只含超长token、短碎片不入列');
+
+// 粘连还原（2026-10-01 真机日志定性：分隔符丢失、圈选符 ○ 识为 O/0 粘词首、字母基本正确）
+const dictSeg = parser.buildDict([{ w: 'prove' }, { w: 'cough' }, { w: 'position' }, { w: 'mess' }, { w: 'punish' }]);
+eq(parser.tokenize('OprovecoughOpositionOmessOpunish', dictSeg),
+  ['prove', 'cough', 'position', 'mess', 'punish'],
+  '标记切块+剥圈选符+词典切分：真机块3原文完整还原');
+eq(parser.tokenize('OprovecoughOpositionOmessOpunish', parser.buildDict([{ w: 'position' }])),
+  ['provecough', 'position', 'mess', 'punish'],
+  '词典未覆盖的块原样保留为候选（交查义词典裁决），不因覆盖低丢弃标记串');
+eq(parser.tokenize('comOdialog', parser.buildDict([{ w: 'dialog' }])), ['com', 'dialog'], '词中小写+大写边界切块（comOdialog）');
+eq(parser.tokenize('packawakebottomrelativeatackOaimOdonate', parser.buildDict([{ w: 'relative' }, { w: 'aim' }, { w: 'donate' }])),
+  ['packawakebottom', 'relative', 'atack', 'aim', 'donate'],
+  '词典命中切出中段词、前后残段原样保留（真机块5形态）');
+eq(parser.tokenize('homework', parser.buildDict([{ w: 'home' }, { w: 'work' }])), ['homework'], '≤16完整token不做词典切分（防误拆真词）');
+eq(parser.tokenize('Oobey', parser.buildDict([{ w: 'obey' }])), ['obey'], '词首大写O圈选符剥离（Oobey→obey）');
+eq(parser.tokenize('odialog', parser.buildDict([{ w: 'dialog' }])), ['dialog'], '词首小写o仅在剩余部分命中词典时剥离');
+eq(parser.tokenize('xqzzkjwoiurasdlkjqw', dictSeg), [], '无标记超长串词典覆盖率不足→按噪声整串丢弃');
+eq(parser.gluedList('xqzzkjwoiurasdlkjqw', dictSeg).length, 1, '噪声丢弃串计入粘连串统计');
+
+// 真机五块原文 × 真实内置词库（junior+primary，仅 relative 命中）回归：
+// 标记边界不依赖词典即可还原单词条块，词典命中额外切出中段词
+const junior12 = require(path.join(__dirname, '..', 'data', 'junior.js'));
+const primary12 = require(path.join(__dirname, '..', 'data', 'primary.js'));
+const realDict12 = parser.buildDict(junior12, primary12);
+const tiles12 = [
+  'OspareOdassicdutysilyobehave',
+  'OshockOmannerhono(u)rolitterboil',
+  'OprovecoughOpositionOmessOpunish',
+  'Ocirde0comOdialog(ue) odireOwealthOawOoppositeOrelOworstoai',
+  'competeOelderdirect0packawakebottomrelativeatackOaimOdonate'
+];
+const out12 = parser.tokenize(tiles12, realDict12);
+['spare', 'shock', 'position', 'mess', 'punish', 'dialog', 'wealth', 'opposite', 'compete', 'relative', 'aim', 'donate']
+  .forEach(function (w) { eq(out12.indexOf(w) !== -1, true, '真机粘连串还原出关键词 ' + w); });
+
 // ---- 场景13：有道查词解析与并发调度（utils/lookup.js） ----
 const lk = require(path.join(__dirname, '..', 'utils', 'lookup.js'));
 const entry13 = {
@@ -415,3 +457,55 @@ p13
     eq(rs[1].w, 'bad', '失败词保留原词');
   })
   .then(finish);
+
+// ---- 场景14：OCR 小图放大与分块（utils/ocr.js 纯函数，不依赖 wx） ----
+// 同步断言先于场景13的异步回调执行，pass/fail 在 finish 前累计完毕
+const ocr = require(path.join(__dirname, '..', 'utils', 'ocr.js'));
+
+// upscaleFor：大图不放大、短边已达标不放大、按短边补齐、封顶3倍
+eq(ocr.upscaleFor(3000, 826), 1, '大图（长边>1280）不放大');
+eq(ocr.upscaleFor(1280, 640), 1, '短边已达 MIN_SHORT_EDGE 不放大');
+eq(ocr.upscaleFor(960, 320), 2, '短边不足按 640/短边 放大（320→640 为2倍）');
+eq(ocr.upscaleFor(640, 200), 3, '放大倍数封顶3倍');
+eq(ocr.upscaleFor(963, 246) > 2.5 && ocr.upscaleFor(963, 246) <= 3, true, 'english.jpg 实例（963×246）放大约2.6倍');
+eq(ocr.upscaleFor(500, 480) > 1.3 && ocr.upscaleFor(500, 480) < 1.4, true, '小图短边略缺按比例放大');
+
+// regionsFor：以放大后的有效尺寸切块（963×246 ×2.60 → 2505×640 → 按列5块；
+// 2505 = round(963×640/246)，块宽 549/597 与 2026-10-01 真机日志逐块一致）
+eq(ocr.regionsFor(900, 1200), [{ x: 0, y: 0, width: 900, height: 1200 }], '小尺寸常规图单块识别（回归）');
+eq(ocr.regionsFor(3000, 826).length, 5, '宽版圈选词表原图（3000×826）仍分5块（回归，2026-09-06 修复保持）');
+eq(ocr.regionsFor(4000, 3000).length, 12, '大图 4×3 分块（回归）');
+eq(ocr.regionsFor(2505, 640).map(function (r) { return [r.width, r.height]; }),
+  [[549, 640], [597, 640], [597, 640], [597, 640], [549, 640]],
+  'english.jpg 放大后（2505×640）按列分5块、块高=图高、中间块含48px两侧重叠（真机日志实证）');
+eq(ocr.regionsFor(2505, 640).every(function (r) { return r.width <= 660; }), true, '分块宽度受 maxTileWidth 约束');
+
+// ---- 场景15：LLM 识别结果解析（utils/llm.js 纯函数，R05-A 2026-10-01） ----
+const llmMod = require(path.join(__dirname, '..', 'utils', 'llm.js'));
+eq(llmMod.parseWords('["spring","autumn"]'), ['spring', 'autumn'], '标准 JSON 数组解析');
+eq(llmMod.parseWords('```json\n["go","goes"]\n```'), ['go', 'goes'], '剥代码围栏');
+eq(llmMod.parseWords('好的，识别结果如下：\n["apple", "banana"]\n以上。'), ['apple', 'banana'], '数组外附带说明文字容忍');
+eq(llmMod.parseWords('["duty", 123, null, "shade"]'), ['duty', 'shade'], '非字符串项过滤');
+eq(llmMod.parseWords('["dialogue","honor"]'), ['dialogue', 'honor'], '拼写注记还原（提示词在模型侧完成）');
+eq(llmMod.parseWords('["a","b"'), ['a', 'b'], '非严格 JSON 落兜底引号提取');
+eq(llmMod.parseWords(''), [], '空内容安全');
+eq(llmMod.parseWords(null), [], 'null 安全');
+eq(typeof llmMod.configured(), 'boolean', 'configured 返回布尔值（Key 已配置=true 走 LLM 主路线；为空=false 直接走 VK）');
+
+// R06（2026-10-01 拍板）：识别自评注记 parseEntries / 单词纠错 parseCorrection / AUTO_FIX 开关
+eq(llmMod.parseEntries('[{"w":"dialogue","note":"原图 dialog(ue)，已还原"}]'),
+  [{ w: 'dialogue', note: '原图 dialog(ue)，已还原' }], 'parseEntries 对象数组（自评注记）');
+eq(llmMod.parseEntries('["go", {"w":"honor","note":"还原"}]'),
+  [{ w: 'go', note: '' }, { w: 'honor', note: '还原' }], '字符串与对象混排兼容');
+eq(llmMod.parseEntries('```json\n[{"w":"spring","note":""}]\n```'),
+  [{ w: 'spring', note: '' }], '剥代码围栏');
+eq(llmMod.parseEntries('前缀文字 [{"w":"a","note":""}] 后缀'), [{ w: 'a', note: '' }], '数组外附带文字容忍');
+eq(llmMod.parseEntries('["x", 123, {"note":"缺w"}]'), [{ w: 'x', note: '' }], '非法项过滤（数字/缺w对象）');
+eq(llmMod.parseEntries('spring autumn'), [{ w: 'spring autumn', note: '' }], '无数组时兜底 parseWords 整行');
+eq(llmMod.parseCorrection('{"w":"Attack","note":"图中为 attack"}'), { w: 'attack', note: '图中为 attack' }, 'parseCorrection 对象解析+小写化');
+eq(llmMod.parseCorrection('```json\n{"w":"dialogue"}\n```'), { w: 'dialogue', note: '' }, '纠错剥围栏+缺note容错');
+eq(llmMod.parseCorrection('图中单词是 "manner" 吧'), { w: 'manner', note: '' }, '纠错兜底引号提取');
+eq(llmMod.parseCorrection('没有词'), null, '纠错无结果返回 null');
+eq(llmMod.AUTO_FIX, false, 'R06-B 开关默认关闭（查义失败词不自动拉取建议）');
+
+

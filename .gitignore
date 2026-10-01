@@ -34,3 +34,7 @@ Desktop.ini
 
 # ---- 代码索引工具 ----
 .codegraph/
+
+# ---- 本地私有配置（含密钥，严禁入库；仓库为公开仓库）----
+# 智谱 GLM 识别 Key：由 utils/llm.config.example.js 复制生成，见 README「拍照收词」
+utils/llm.config.js
