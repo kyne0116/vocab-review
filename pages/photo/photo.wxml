@@ -36,7 +36,7 @@
   <block wx:if="{{stage === 'pick'}}">
     <view class="card">
       <view class="list-title">识别到 {{candidates.length}} 个单词（已勾选 {{checkedCount}}）</view>
-      <view class="text-muted hint">灰色「已收录」表示与内置词库重复，不可收录。{{llmOk ? '长按单词可 AI 核对拼写。' : ''}}</view>
+      <view class="text-muted hint">灰色「已收录」表示与内置词库重复，不可收录。点右侧红色「修改」可改单词拼写{{llmOk ? '，长按单词可 AI 核对' : '' }}。</view>
       <view class="glue-tip" wx:if="{{glueCount > 0}}">
         ⚠️ 另有 {{glueCount}} 段连串文字被过滤（文字过小或多列版面粘连），以下结果可能不完整；建议对原页面近距离重拍。
       </view>
@@ -48,6 +48,7 @@
           <view class="cand-note" wx:if="{{item.note}}">{{item.note}}</view>
         </view>
         <view class="cand-tag" wx:if="{{item.known}}">已收录</view>
+        <view class="cand-edit" catchtap="editCandidate" data-idx="{{index}}">修改</view>
       </view>
     </view>
     <button class="btn-primary act-btn" bindtap="lookupMeanings">查询释义（{{checkedCount}} 词）</button>
@@ -69,26 +70,28 @@
   <block wx:if="{{stage === 'result'}}">
     <view class="card">
       <view class="list-title">查词完成：{{okCount}}/{{entries.length}} 个词有释义</view>
+      <view class="text-muted hint">待补义词可重试或 AI 纠错；发现拼写有误，请在查义前的候选列表用「修改」改词后重新查义。</view>
       <view class="entry" wx:for="{{entries}}" wx:key="w">
-        <view class="entry-head">
-          <view class="entry-word">{{item.w}}</view>
-          <view class="entry-phonic" wx:if="{{item.p}}">[{{item.p}}]</view>
-        </view>
-        <view class="entry-m" wx:if="{{item.ok}}">{{item.m}}</view>
-        <view class="entry-m fail-row" wx:else>
-          <text class="text-muted">待补义</text>
-          <text class="link" data-idx="{{index}}" catchtap="retryOne">重试</text>
-          <text class="link" wx:if="{{llmOk && imageSrc}}" data-idx="{{index}}" catchtap="fixEntry">AI 纠错</text>
-          <text class="link" data-idx="{{index}}" catchtap="editMeaning">手动输入</text>
-        </view>
-        <view class="fix-sug" wx:if="{{!item.ok && item.fix}}">
-          AI 建议：<text class="link" data-idx="{{index}}" catchtap="applyFix">改用「{{item.fix.w}}」</text><text wx:if="{{item.fix.note}}">（{{item.fix.note}}）</text>
+        <view class="entry-main">
+          <view class="entry-head">
+            <view class="entry-word">{{item.w}}</view>
+            <view class="entry-phonic" wx:if="{{item.p}}">[{{item.p}}]</view>
+          </view>
+          <view class="entry-m" wx:if="{{item.ok}}">{{item.m}}</view>
+          <view class="entry-m fail-row" wx:else>
+            <text class="text-muted">待补义</text>
+            <text class="link" data-idx="{{index}}" catchtap="retryOne">重试</text>
+            <text class="link" wx:if="{{llmOk && imageSrc}}" data-idx="{{index}}" catchtap="fixEntry">AI 纠错</text>
+          </view>
+          <view class="fix-sug" wx:if="{{!item.ok && item.fix}}">
+            AI 建议：<text class="link" data-idx="{{index}}" catchtap="applyFix">改用「{{item.fix.w}}」</text><text wx:if="{{item.fix.note}}">（{{item.fix.note}}）</text>
+          </view>
         </view>
       </view>
     </view>
     <button class="btn-primary act-btn" bindtap="save">收录 {{okCount}} 词</button>
     <view class="text-muted pending-tip" wx:if="{{entries.length - okCount > 0}}">
-      {{entries.length - okCount}} 个待补义词暂不收录，可点「重试 / 手动输入」补齐后再收录
+      {{entries.length - okCount}} 个待补义词暂不收录，可通过重试、AI 纠错或点「修改」改单词补齐后再收录
     </view>
     <button class="btn-plain act-btn" bindtap="again">重新拍照</button>
   </block>

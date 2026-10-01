@@ -1,0 +1,104 @@
+/* 生词本管理页样式（R09）：列表结构沿用错词本，勾选圈沿用拍照候选页 */
+.head { margin-bottom: 24rpx; }
+.head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.head-title { font-size: 36rpx; font-weight: bold; }
+.head-info { margin-top: 8rpx; }
+.manage-btn {
+  color: #07c160;
+  font-size: 28rpx;
+  padding: 8rpx 16rpx;
+}
+
+/* 搜索框 */
+.search {
+  display: flex;
+  align-items: center;
+  background: #f6f7f9;
+  border-radius: 12rpx;
+  margin-top: 20rpx;
+  padding: 0 20rpx;
+}
+.search-input { flex: 1; font-size: 28rpx; height: 68rpx; }
+.search-clear { color: #999; font-size: 30rpx; padding: 8rpx 4rpx 8rpx 16rpx; }
+
+/* 词列表 */
+.list { padding: 4rpx 30rpx; }
+.wl {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 22rpx 0;
+  border-bottom: 2rpx solid #f6f6f6;
+}
+.wl:last-child { border-bottom: none; }
+.wl-check {
+  width: 40rpx;
+  height: 40rpx;
+  border: 2rpx solid #ccc;
+  border-radius: 8rpx;
+  margin-right: 0;
+  text-align: center;
+  line-height: 40rpx;
+  font-size: 26rpx;
+  color: #fff;
+  flex-shrink: 0;
+  display: none;
+}
+.managing .wl-check { display: block; margin-right: 20rpx; }
+.wl-check.on { background: #07c160; border-color: #07c160; }
+.wl-left { flex: 1; min-width: 0; }
+.wl-head { display: flex; align-items: center; flex-wrap: wrap; }
+.wl-word { font-size: 34rpx; font-weight: bold; color: #e64340; }
+.wl-phonic { font-size: 22rpx; color: #999; margin-left: 12rpx; }
+.wl-status {
+  margin-left: auto;
+  font-size: 22rpx;
+  border-radius: 8rpx;
+  padding: 4rpx 12rpx;
+  flex-shrink: 0;
+}
+.wl-status.pend { background: #e8f7ef; color: #07c160; }
+.wl-status.lg { background: #eef1f6; color: #576b95; }
+.wl-status.lg-done { background: #f0f0f0; color: #999; }
+.wl-mean { font-size: 26rpx; color: #555; margin-top: 4rpx; }
+.wl-del {
+  background: #e64340;
+  color: #fff;
+  font-size: 24rpx;
+  border-radius: 10rpx;
+  padding: 12rpx 20rpx;
+  flex-shrink: 0;
+  margin-left: 20rpx;
+}
+.more-tip { text-align: center; padding: 20rpx 0 8rpx; }
+
+/* 空状态 */
+.empty { text-align: center; padding: 80rpx 30rpx; }
+.empty-icon { font-size: 80rpx; margin-bottom: 20rpx; }
+
+/* 管理模式底部操作条 */
+.managing.container { padding-bottom: 160rpx; }
+.bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  padding: 20rpx 30rpx calc(20rpx + env(safe-area-inset-bottom));
+  background: #fff;
+  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+.bar-btn {
+  flex: 1;
+  text-align: center;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  padding: 20rpx 0;
+}
+.bar-btn + .bar-btn { margin-left: 20rpx; }
+.bar-btn.plain { background: #fff; color: #07c160; border: 2rpx solid #07c160; }
+.bar-btn.danger { background: #e64340; color: #fff; }

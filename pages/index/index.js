@@ -71,5 +71,15 @@ Page({
   goReview: function () { wx.navigateTo({ url: '/pages/review/review' }); },
   goHistory: function () { wx.navigateTo({ url: '/pages/history/history' }); },
   goWrong: function () { wx.navigateTo({ url: '/pages/wrong/wrong' }); },
-  goOverview: function () { wx.navigateTo({ url: '/pages/overview/overview' }); }
+  goOverview: function () { wx.navigateTo({ url: '/pages/overview/overview' }); },
+  // 词库总量 → 词库页：浏览/搜索当前账号词库；拍照生词本还可在其中删除（R09）
+  goBank: function () {
+    wx.navigateTo({
+      url: '/pages/bank/bank',
+      // navigateTo 失败默认静默；显式报错便于区分「包体未含新页面（需完整重编译）」等问题
+      fail: function (err) {
+        wx.showToast({ title: ((err && err.errMsg) || '打开词库页失败').slice(0, 40), icon: 'none' });
+      }
+    });
+  }
 });

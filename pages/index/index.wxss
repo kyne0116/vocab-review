@@ -139,6 +139,9 @@
 }
 .stats-num { font-size: 40rpx; font-weight: bold; color: #07c160; }
 .stats-label { font-size: 24rpx; color: #999; margin-top: 8rpx; }
+/* 词库总量格：词库页入口（R09），绿色标签区分可点；加 padding 扩大点击热区 */
+.stats-item.tappable { padding: 10rpx 24rpx; }
+.stats-item.tappable .stats-label { color: #07c160; }
 .history-link {
   margin-top: 30rpx;
   text-align: center;

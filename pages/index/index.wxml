@@ -65,9 +65,9 @@
         <view class="stats-num">{{batches}}</view>
         <view class="stats-label">已学批次</view>
       </view>
-      <view class="stats-item">
+      <view class="stats-item tappable" bindtap="goBank">
         <view class="stats-num">{{totalWords}}</view>
-        <view class="stats-label">词库总量</view>
+        <view class="stats-label">词库总量 ▸</view>
       </view>
     </view>
     <view class="history-link" bindtap="goHistory">查看学习记录（日期与内容）→</view>

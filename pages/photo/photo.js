@@ -4,8 +4,6 @@ const ocr = require('../../utils/ocr.js');
 const llm = require('../../utils/llm.js');
 const parser = require('../../utils/wordParser.js');
 const lookup = require('../../utils/lookup.js');
-const junior = require('../../data/junior.js');
-const primary = require('../../data/primary.js');
 
 Page({
   data: {
@@ -86,11 +84,13 @@ Page({
       const lines = Array.isArray(result) ? result : ((result && result.words) || []);
       const notes = (result && !Array.isArray(result) && result.notes) || {};
       const bank = store.getPhotoBank();
-      // 切分词典 = 内置词库 + 拍照生词本（与 buildCandidates 内部一致），供粘连还原与过滤统计
-      const dict = parser.buildDict(junior, primary, bank);
+      // 切分词典与「已收录」命中都基于有效内置库（静态库剔除已删词，R09-2：
+      // 用户从词库页删掉的内置词，拍照时不再标「已收录」、可重新收录）
+      const builtIn = store.bankOf('junior').concat(store.bankOf('primary'));
+      const dict = parser.buildDict(builtIn, [], bank);
       const glue = parser.gluedList(lines, dict);
       const tokens = parser.tokenize(lines, dict);
-      const candidates = parser.buildCandidates(lines, junior.concat(primary), bank)
+      const candidates = parser.buildCandidates(lines, builtIn, bank)
         .map(function (c) {
           return { w: c.w, known: c.known, checked: !c.known, note: notes[c.w] || '' };
         });
@@ -140,6 +140,43 @@ Page({
     this.setData(upd);
   },
 
+  // 候选页点行右侧「修改」改单词（R08③ 2026-10-02：入口自查义结果页前移至此）：
+  // 确认后更新候选行并重算「已收录」命中与勾选态；释义由后续「查询释义」统一获取
+  editCandidate: function (e) {
+    const idx = e.currentTarget.dataset.idx;
+    const c = this.data.candidates[idx];
+    if (!c) return;
+    const that = this;
+    wx.showModal({
+      title: '修改单词：' + c.w,
+      editable: true,
+      content: c.w,
+      placeholderText: '如：apple',
+      success: function (res) {
+        if (!res.confirm) return;
+        const w = (res.content || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        if (!w || w === c.w) return;
+        if (!/^[a-z][a-z' \-]*$/.test(w)) {
+          return wx.showToast({ title: '仅支持英文单词或短语', icon: 'none' });
+        }
+        if (that.data.candidates.some(function (x, i) { return i !== idx && x.w === w; })) {
+          return wx.showToast({ title: '候选中已有「' + w + '」', icon: 'none' });
+        }
+        if (store.getPhotoBank().some(function (x) { return x.w === w; })) {
+          return wx.showToast({ title: '生词本中已有「' + w + '」', icon: 'none' });
+        }
+        // 与新收录同规则：命中内置有效库 → 标灰禁选（R09-2：已删的内置词不算命中）
+        const known = store.bankOf('junior').concat(store.bankOf('primary')).some(function (x) { return x.w === w; });
+        const upd = {};
+        upd['candidates[' + idx + ']'] = { w: w, known: known, checked: !known, note: c.note };
+        if (c.checked && !known) upd.checkedCount = that.data.checkedCount; // 勾选态保持，计数不变
+        else if (c.checked && known) upd.checkedCount = that.data.checkedCount - 1;
+        else if (!c.checked && !known) upd.checkedCount = that.data.checkedCount + 1;
+        that.setData(upd);
+      }
+    });
+  },
+
   /* ---------- R06-A②：AI 纠错（带原图核对单词拼写） ---------- */
   // 候选页长按某词 → AI 带图核对，建议不同则弹窗确认替换
   fixCandidate: function (e) {
@@ -161,7 +198,7 @@ Page({
           if (that.data.candidates.some(function (x) { return x.w === r.w; })) {
             return wx.showToast({ title: '候选中已有「' + r.w + '」', icon: 'none' });
           }
-          const known = junior.concat(primary).some(function (x) { return x.w === r.w; });
+          const known = store.bankOf('junior').concat(store.bankOf('primary')).some(function (x) { return x.w === r.w; });
           const upd = {};
           upd['candidates[' + idx + ']'] = { w: r.w, known: known, checked: !known, note: r.note || c.note };
           if (c.checked && !known) upd.checkedCount = that.data.checkedCount; // 勾选态保持，计数不变
@@ -209,13 +246,15 @@ Page({
     });
   },
 
-  // 用新词（AI 纠错/建议）替换某待补义词条并重新查义
+  // 用新词（AI 纠错 / AUTO_FIX 建议）替换某词条并重新查义；词条可原为已查义或待补义，okCount 按新旧状态差值增减
   relookupWord: function (idx, word) {
     const that = this;
-    lookup.lookup(word).then(function (r) {
+    return lookup.lookup(word).then(function (r) {
+      const old = that.data.entries[idx];
       const upd = {};
       upd['entries[' + idx + ']'] = { w: word, m: r.m || '', p: r.p || '', ok: r.ok };
-      if (r.ok) upd.okCount = that.data.okCount + 1;
+      const delta = (r.ok ? 1 : 0) - (old && old.ok ? 1 : 0);
+      if (delta) upd.okCount = that.data.okCount + delta;
       that.setData(upd);
     });
   },
@@ -232,7 +271,7 @@ Page({
       if (!r.w || r.w === entry.w) {
         return wx.showModal({
           title: 'AI 核对无误',
-          content: r.note || ('「' + entry.w + '」与图片一致；可手动输入释义或换清晰图重拍'),
+          content: r.note || ('「' + entry.w + '」与图片一致；可点「重试」再查，或换清晰图重拍'),
           showCancel: false
         });
       }
@@ -266,40 +305,18 @@ Page({
     lookup.lookup(entry.w).then(function (r) {
       const upd = {};
       upd['entries[' + idx + ']'] = r;
-      upd.okCount = that.data.okCount + 1;
+      if (r.ok) upd.okCount = that.data.okCount + 1;
       that.setData(upd);
-    });
-  },
-
-  // 待补义词：手动输入释义
-  editMeaning: function (e) {
-    const idx = e.currentTarget.dataset.idx;
-    const entry = this.data.entries[idx];
-    if (!entry) return;
-    const that = this;
-    wx.showModal({
-      title: '补充释义：' + entry.w,
-      editable: true,
-      placeholderText: '如：n. 苹果',
-      success: function (res) {
-        if (!res.confirm) return;
-        const m = (res.content || '').trim();
-        if (!m) return;
-        const upd = {};
-        upd['entries[' + idx + ']'] = { w: entry.w, m: m, p: entry.p || '', ok: true };
-        if (!entry.ok) upd.okCount = that.data.okCount + 1;
-        that.setData(upd);
-      }
     });
   },
 
   /* ---------- 收录 ---------- */
   save: function () {
-    // 只收录已拿到释义的词；待补义词填入释义后才会进入收录
+    // 只收录已拿到释义的词；待补义词重查成功（重试 / AI 纠错 / 点「修改」改词）后才会进入收录
     const words = this.data.entries.filter(function (x) { return x.ok; })
       .map(function (x) { return { w: x.w, m: x.m, p: x.p }; });
     if (!words.length) {
-      wx.showToast({ title: '没有可收录的词，请先补充释义', icon: 'none' });
+      wx.showToast({ title: '没有可收录的词，请先补齐释义', icon: 'none' });
       return;
     }
     const added = store.addToPhotoBank(words);

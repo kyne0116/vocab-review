@@ -1,0 +1,59 @@
+<view class="container {{manageMode ? 'managing' : ''}}">
+
+  <!-- 标题统计 + 搜索 -->
+  <view class="card head">
+    <view class="head-row">
+      <view class="head-title">{{isPhoto ? '📷' : '📚'}} {{accName}} · {{total}} 词</view>
+      <view class="manage-btn" bindtap="toggleManage">{{manageMode ? '完成' : '管理'}}</view>
+    </view>
+    <view class="head-info text-muted">
+      已学 {{learnedCount}} · 待学 {{pendingCount}}；点单词朗读{{manageMode ? '，点行勾选' : ''}}
+    </view>
+    <view class="search">
+      <input class="search-input" placeholder="搜索单词或释义" value="{{keyword}}"
+             bindinput="onSearch" confirm-type="search" />
+      <view class="search-clear" wx:if="{{keyword}}" bindtap="clearSearch">✕</view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{items.length === 0}}" class="card empty">
+    <block wx:if="{{keyword}}">
+      <view class="empty-icon">🔍</view>
+      <view>没有匹配「{{keyword}}」的词</view>
+    </block>
+    <block wx:else>
+      <view class="empty-icon">{{isPhoto ? '📷' : '📚'}}</view>
+      <view wx:if="{{isPhoto}}">生词本还是空的</view>
+      <view wx:else>词库已清空</view>
+      <view class="text-muted" style="margin-top:12rpx;" wx:if="{{isPhoto}}">回到首页「拍照收词」拍一张课本或练习册即可收录</view>
+    </block>
+  </view>
+
+  <!-- 词列表（大词库分屏渲染，触底续载） -->
+  <view class="card list" wx:else>
+    <view class="wl {{item.sel ? 'sel' : ''}}" wx:for="{{viewItems}}" wx:key="w"
+          data-idx="{{index}}" bindtap="tapRow">
+      <view class="wl-check {{manageMode ? 'show' : ''}} {{item.sel ? 'on' : ''}}">{{item.sel ? '✓' : ''}}</view>
+      <view class="wl-left">
+        <view class="wl-head">
+          <view class="wl-word">{{item.w}}</view>
+          <view class="wl-phonic" wx:if="{{item.p}}">[{{item.p}}]</view>
+          <view class="wl-status {{item.learned ? (item.done ? 'lg-done' : 'lg') : 'pend'}}">{{item.statusText}}</view>
+        </view>
+        <view class="wl-mean">{{item.m || '（无释义）'}}</view>
+      </view>
+      <view class="wl-del" wx:if="{{!manageMode}}" catchtap="deleteOne" data-idx="{{index}}">删除</view>
+    </view>
+    <view class="more-tip text-muted" wx:if="{{shownCount < items.length}}">
+      已显示 {{shownCount}} / {{items.length}} 词，继续上拉加载
+    </view>
+  </view>
+
+  <!-- 管理模式底部操作条 -->
+  <view class="bar" wx:if="{{manageMode}}">
+    <view class="bar-btn plain" bindtap="selectAll">{{allSel ? '取消全选' : '全选结果'}}</view>
+    <view class="bar-btn danger" bindtap="deleteSelected">删除选中（{{selCount}}）</view>
+  </view>
+
+</view>
