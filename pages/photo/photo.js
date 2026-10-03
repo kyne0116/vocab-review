@@ -19,7 +19,10 @@ Page({
     progress: { done: 0, total: 0 },
     entries: [],       // [{ w, m, p, ok }]，ok=false 为「待补义」
     okCount: 0,
-    addedCount: 0
+    addedCount: 0,
+    knownCount: 0,     // 候选中「已收录」灰词数（R15 随批学）
+    grayCount: 0,      // 本次收录进会话的灰词数（store 实际收录结果）
+    totalCount: 0      // 本次拍照会话总词数（新收 + 灰词）
   },
   onShow: function () {
     // 本地 VK：鸿蒙端微信未支持 AI 模块（官方适配指南），入口预判走降级提示
@@ -86,10 +89,12 @@ Page({
       const accId = store.currentAccount().id;
       const queue = store.getAccountPhotoWords(accId);
       // R14：切分词典保持两教材 + 当前队列（识别/粘连还原质量不受账号维度影响）；
-      // 「已收录」判定收窄到当前账号（另一教材的词允许收进当前账号）
+      // 「已收录」判定收窄到当前账号（另一教材的词允许收进当前账号）。
+      // R15：队列已有词不再隐藏，与教材库已有词一并置灰（随本次拍照会话整体进批学习）
       const builtIn = store.bankOf('junior').concat(store.bankOf('primary'));
       const curSet = {};
       store.bankOf(accId).forEach(function (x) { curSet[x.w.toLowerCase()] = true; });
+      queue.forEach(function (x) { curSet[x.w.toLowerCase()] = true; });
       const dict = parser.buildDict(builtIn, [], queue);
       const glue = parser.gluedList(lines, dict);
       const tokens = parser.tokenize(lines, dict);
@@ -98,15 +103,15 @@ Page({
           return { w: c.w, known: !!curSet[c.w.toLowerCase()], checked: !curSet[c.w.toLowerCase()], note: notes[c.w] || '' };
         });
       // [OCR] 诊断日志（回传定性用，定案后随其余 [OCR] 日志一并移除）：
-      // 完整呈现 文本→token→过滤→候选 链路；拍照本已有滤除数 = token 数 - 候选数（known 词仍展示）
+      // 完整呈现 文本→token→候选 链路；已收录词仍展示并计数（R15 置灰随批学）
       console.log('[OCR] 解析 token ' + tokens.length + ' 个：' + tokens.slice(0, 200).join(',') + (tokens.length > 200 ? '…' : ''));
       if (glue.length) {
         console.log('[OCR] 粘连串过滤 ' + glue.length + ' 条：' + glue.slice(0, 8).map(function (g) {
           return g.length > 40 ? g.slice(0, 40) + '…(' + g.length + '字母)' : g;
         }).join(' | '));
       }
-      console.log('[OCR] 候选 ' + candidates.length + ' 个（拍照本已有滤除 ' + (tokens.length - candidates.length) + ' 个）：'
-        + candidates.map(function (c) { return c.w + (c.known ? '(内置)' : ''); }).join(','));
+      console.log('[OCR] 候选 ' + candidates.length + ' 个（其中已收录置灰 ' + candidates.filter(function (c) { return c.known; }).length + ' 个）：'
+        + candidates.map(function (c) { return c.w + (c.known ? '(已收录)' : ''); }).join(','));
       if (!candidates.length) {
         that.setData({ stage: 'idle', imageSrc: '' });
         // 有粘连串被过滤 = 文字被识别但串成长串（文字过小/多列粘连），与「图里没词」引导不同
@@ -123,6 +128,7 @@ Page({
         stage: 'pick',
         candidates: candidates,
         checkedCount: candidates.filter(function (c) { return c.checked; }).length,
+        knownCount: candidates.filter(function (c) { return c.known; }).length,
         glueCount: glue.length
       });
     }).catch(function (err) {
@@ -165,10 +171,8 @@ Page({
         if (that.data.candidates.some(function (x, i) { return i !== idx && x.w === w; })) {
           return wx.showToast({ title: '候选中已有「' + w + '」', icon: 'none' });
         }
-        if (store.getAccountPhotoWords(store.currentAccount().id).some(function (x) { return x.w === w; })) {
-          return wx.showToast({ title: '已收录过「' + w + '」', icon: 'none' });
-        }
-        // 与新收录同规则：命中当前账号有效库 → 标灰禁选（R09-2 + R14：已删的内置词不算命中）
+        // 与收录同规则：命中当前账号有效库或拍照队列 → 标灰禁选（R15：含队列已有词；
+        // R09-2：已删的内置词不算命中），灰词随批学不重复收录
         const known = store.inCurrentBank(w);
         const upd = {};
         upd['candidates[' + idx + ']'] = { w: w, known: known, checked: !known, note: c.note };
@@ -201,7 +205,9 @@ Page({
           if (that.data.candidates.some(function (x) { return x.w === r.w; })) {
             return wx.showToast({ title: '候选中已有「' + r.w + '」', icon: 'none' });
           }
-          const known = store.bankOf('junior').concat(store.bankOf('primary')).some(function (x) { return x.w === r.w; });
+          // 纠错换词与收录同规则：命中当前账号有效库或队列 → 置灰（R15 统一为 inCurrentBank，
+          // 修正旧代码误查两教材导致的跨账号误灰）
+          const known = store.inCurrentBank(r.w);
           const upd = {};
           upd['candidates[' + idx + ']'] = { w: r.w, known: known, checked: !known, note: r.note || c.note };
           if (c.checked && !known) upd.checkedCount = that.data.checkedCount; // 勾选态保持，计数不变
@@ -315,15 +321,30 @@ Page({
 
   /* ---------- 收录 ---------- */
   save: function () {
-    // 只收录已拿到释义的词；待补义词重查成功（重试 / AI 纠错 / 点「修改」改词）后才会进入收录
-    const words = this.data.entries.filter(function (x) { return x.ok; })
-      .map(function (x) { return { w: x.w, m: x.m, p: x.p }; });
-    if (!words.length) {
+    // R15：整次拍照 = 一个学习单元。新词 = 已查到释义的勾选词（待补义词仍不收录）；
+    // 灰词（「已收录」行）不重复收录，词义音标由 store 从当前账号词库/队列取快照，
+    // 与新词一起按照片出现顺序存为一个拍照会话，出批时整体学习
+    const entryMap = {};
+    this.data.entries.forEach(function (x) { if (x.ok) entryMap[x.w] = x; });
+    const list = this.data.candidates
+      .filter(function (c) { return c.known || entryMap[c.w]; })
+      .map(function (c) {
+        return c.known
+          ? { w: c.w, gray: true }
+          : { w: c.w, m: entryMap[c.w].m, p: entryMap[c.w].p };
+      });
+    const r = store.savePhotoSession(list);
+    if (!r.total) {
       wx.showToast({ title: '没有可收录的词，请先补齐释义', icon: 'none' });
       return;
     }
-    const added = store.addToAccountPhoto(words); // R14：收进当前账号
-    this.setData({ stage: 'done', addedCount: added, accName: store.currentAccount().name });
+    this.setData({
+      stage: 'done',
+      addedCount: r.added,
+      grayCount: r.gray,
+      totalCount: r.total,
+      accName: store.currentAccount().name
+    });
   },
 
   // 去学拍照生词：词已在当前账号队列，直接回新单词页（优先出批）
@@ -335,7 +356,8 @@ Page({
     this._recognizeId = (this._recognizeId || 0) + 1;
     this.setData({
       stage: 'idle', imageSrc: '', recognizeHint: '正在识别图片中的单词…', candidates: [], checkedCount: 0,
-      glueCount: 0, progress: { done: 0, total: 0 }, entries: [], okCount: 0, addedCount: 0
+      knownCount: 0, glueCount: 0, progress: { done: 0, total: 0 }, entries: [], okCount: 0,
+      addedCount: 0, grayCount: 0, totalCount: 0
     });
   }
 });

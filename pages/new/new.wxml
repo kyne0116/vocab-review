@@ -4,7 +4,8 @@
       <view class="head-main">
         <view class="head-title">{{accountName}} · 第 {{batch.batchNo}} 批新单词</view>
         <view class="head-info">共 {{batch.words.length}} 词 · {{today}}</view>
-        <view class="head-range text-muted">词库第 {{batch.start + 1}} ~ {{batch.end + 1}} 位（按顺序）</view>
+        <view class="head-range text-muted" wx:if="{{batch.photo}}">📷 拍照收词批（整次拍照的单词，含已收录词）</view>
+        <view class="head-range text-muted" wx:else>词库第 {{batch.start + 1}} ~ {{batch.end + 1}} 位（按顺序）</view>
       </view>
       <view wx:if="{{mode === 'auto'}}" class="learn-btn {{learnActive ? 'stop' : ''}}" bindtap="toggleLearn">{{learnBtn}}</view>
     </view>
@@ -19,7 +20,7 @@
     <scroll-view class="list-scroll" scroll-y scroll-into-view="{{scrollInto}}">
       <view class="card list">
         <view class="word-item {{learnIdx === index ? 'learning' : ''}}" wx:for="{{batch.words}}" wx:key="w" id="w-{{index}}" data-idx="{{index}}" bindtap="tapWord">
-          <text class="word-idx">{{batch.start + index + 1}}</text>
+          <text class="word-idx">{{batch.photo ? index + 1 : batch.start + index + 1}}</text>
           <view class="word-main">
             <text class="word-text">{{item.w}}</text>
             <text class="word-phonetic" wx:if="{{item.p}}">{{item.p}}</text>

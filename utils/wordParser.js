@@ -177,14 +177,13 @@ function gluedCount(texts, dict) {
 
 // 生成确认页候选列表：
 //   builtInWords 内置词库词条（{w,m} 数组），命中的词 known=true（标灰「已收录」，不可勾选）
-//   photoWords   拍照生词本已有词条，命中的词直接滤掉不显示
+//   photoWords   拍照生词本已有词条，R15 起不再滤除（灰显随批学），是否标灰由页面按
+//   「当前账号」判定（parser 层无账号概念，known 仅表示命中传入的内置词表）
 //   切分词典 = 内置词库 + 拍照生词本（两者都是真实词表，拍照本随使用增长、切分覆盖逐步提升）
 function buildCandidates(texts, builtInWords, photoWords) {
   const builtIn = toSet(builtInWords);
-  const photo = toSet(photoWords);
   const dict = buildDict(builtInWords, photoWords);
   return parseTokens(texts, dict).words
-    .filter(function (w) { return !photo[w]; })
     .map(function (w) { return { w: w, known: !!builtIn[w] }; });
 }
 

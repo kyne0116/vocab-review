@@ -363,8 +363,8 @@ eq(parser.tokenize(null), [], 'null 安全');
 const builtIn12 = [{ w: 'name', m: 'n. 名字' }, { w: 'excuse me', m: '打扰一下' }];
 const photo12 = [{ w: 'apple', m: 'n. 苹果' }];
 eq(parser.buildCandidates(['Name apple spring name'], builtIn12, photo12),
-  [{ w: 'name', known: true }, { w: 'spring', known: false }],
-  '内置命中标known(R04)、拍照已有滤掉、保持出现顺序');
+  [{ w: 'name', known: true }, { w: 'apple', known: false }, { w: 'spring', known: false }],
+  '内置命中标known(R04)、拍照已有不滤除（R15 置灰随批学）、保持出现顺序');
 eq(parser.buildCandidates(['excuse me'], builtIn12, photo12),
   [{ w: 'excuse', known: false }, { w: 'me', known: false }],
   'v1 单词粒度（R03=A）：短语按单词提取');
@@ -531,7 +531,7 @@ eq(llmMod.parseCorrection('图中单词是 "manner" 吧'), { w: 'manner', note: 
 eq(llmMod.parseCorrection('没有词'), null, '纠错无结果返回 null');
 eq(llmMod.AUTO_FIX, false, 'R06-B 开关默认关闭（查义失败词不自动拉取建议）');
 
-// ---- 场景16：拍照词删除联动清理（R14：removeWords 同步队列） ----
+// ---- 场景16：拍照词删除联动清理（R14：removeWords 同步队列；R15 会话整体出批） ----
 storage.vocab_photo_words_junior = [];
 const words16 = [];
 for (let i = 1; i <= 40; i++) {
@@ -539,37 +539,39 @@ for (let i = 1; i <= 40; i++) {
   words16.push({ w: 'qword' + n, m: 'n. 词' + n });
 }
 eq(store.addToAccountPhoto(words16), 40, '收录40词');
+const b16 = store.nextBatch();
+eq(b16.photo, true, '拍照批优先出批');
+eq(b16.words.length, 40, 'R15：一次收录整体成批，不受35词上限（识别多少学多少）');
 setDay(2027, 1, 1);
-store.saveLearnedBatch(store.nextBatch()); // 拍照批：qword01~qword35
+store.saveLearnedBatch(b16); // 拍照批：qword01~qword40 整批
 setDay(2027, 1, 2);
 store.finishReview(store.buildReviewSession(), { qword01: true, qword02: true });
 eq(store.getRecords().slice(-1)[0].wrongPool.length, 2, '复习忘2词入遗忘池');
 
-// 删除：已学在池 qword01 + 已学不在池 qword05 + 待学 qword40（对象/字符串入参混用）
+// 删除：已学在池 qword01 + 已学不在池 qword05 + 已学不在池 qword40（对象/字符串入参混用）
 const r16 = store.removeWords([{ w: 'qword01' }, { w: 'qword05' }, 'qword40']);
 eq(r16.removed, 3, '删除3词');
-eq(r16.learned, 2, '其中已学2词');
+eq(r16.learned, 3, '其中已学3词（R15 整批学习后全为已学）');
 eq(store.getAccountPhotoWords('junior').length, 37, '队列剩37');
 eq(store.getAccountPhotoWords('junior').some(w => ['qword01', 'qword05', 'qword40'].indexOf(w.w) !== -1), false, '三词已移出队列');
 const rec16 = store.getRecords().slice(-1)[0];
-eq(rec16.words.length, 33, '拍照批快照移除2词');
+eq(rec16.words.length, 37, '拍照批快照移除3词');
 eq(rec16.wrongPool.map(w => w.w).join(','), 'qword02', '遗忘池同步移除已删词');
 eq(store.getWrongWords().some(w => w.word === 'qword01'), false, '错词本不含已删词');
 
-// 总览快照化：拍照批按快照33词，待学拍照词仍是当前批（优先于静态）
+// 总览快照化：拍照批按快照37词；会话学完后回落静态（无待学拍照批）
 const ov16 = store.getOverview();
 const qBatch16 = ov16.batches.filter(b => b.words.some(w => w.w === 'qword02'))[0];
-eq(qBatch16.count, 33, '总览：拍照批按快照33词');
+eq(qBatch16.count, 37, '总览：拍照批按快照37词');
 eq(qBatch16.wrongCount, 1, '总览：拍照批遗忘池1词');
 const cur16 = ov16.batches.filter(b => b.state === 'current')[0];
-eq(cur16.words.map(w => w.w).join(','), 'qword36,qword37,qword38,qword39', '当前批=待学拍照4词（qword40已删，优先于静态）');
+eq(cur16.words[0].w, store.nextBatch().words[0].w, '总览：会话学完后当前批回落静态（与 nextBatch 一致）');
 // 词库页数据：拍照词条目打 photo 标，状态快照反查
 const e16 = {};
 store.getBankEntries().forEach(function (e) { e16[e.w] = e; });
 eq(e16['qword02'].learned, true, '词库页：已学拍照词 learned=true');
 eq(e16['qword02'].photo, true, '词库页：拍照词带 photo 标');
-eq(e16['qword36'].learned, false, '词库页：待学拍照词 learned=false');
-eq(e16['qword36'].batchNo, 0, '词库页：待学拍照词 batchNo=0');
+eq(e16['qword36'].learned, true, '词库页：R15 整批40词，qword36 也已学（不再切35待学）');
 
 // 边界：删不存在词 / 空入参为空操作
 eq(store.removeWords(['nope']).removed, 0, '删不存在词为空操作');
@@ -726,9 +728,102 @@ eq(m22.wrongPool.length, 1, '遗忘池随迁');
 eq(m22.reviewHistory.length, 1, '复习历史随迁');
 eq(m22.date, '2026-09-10', '学习日期保留');
 eq(store.unlearnedPhotoWords().map(x => x.w).join(','), 'old3', '迁移的未学词进入优先队列');
+const pb22 = store.nextBatch();
+eq(pb22.photo === true && pb22.words.map(x => x.w).join(','), 'old3',
+  'R15：会话键已初始化时迁移未学词同步包成会话，nextBatch 整体出批');
 // 防重跑：再次调用为空操作；源键保留（误迁可清标记换目标重跑）
 eq(store.migratePhotoAccount('junior'), false, '已迁移标记防重跑');
 eq(storage.vocab_photo_bank.length, 4, '源词库键保留不删');
+
+// ---- 场景23：拍照会话整体出批（R15：一次拍照 = 一个学习单元，灰词随批学） ----
+storage.vocab_records_junior = []; storage.vocab_cursor_junior = 0;
+storage.vocab_photo_words_junior = [];
+storage.vocab_photo_sessions_junior = []; // 显式初始化（跳过 legacy 包裹路径）
+setDay(2027, 3, 1);
+const bank23 = store.currentBank().slice(); // 场景17 删除后的有效库（快照用）
+
+// 前置：队列灰词 = 已学过的拍照词 grayq；再学一批静态词（bank23[0] 在其中、bank23[40] 不在其中）
+eq(store.addToAccountPhoto([{ w: 'grayq', m: 'n. 队列灰词', p: 'ɡreɪ' }]), 1, '前置：队列造1词');
+store.saveLearnedBatch(store.nextBatch());          // 拍照批：grayq
+store.saveLearnedBatch(store.nextBatch());          // 静态批1：bank23[0~34]
+
+// 一次拍照：2 新词 + 2 教材灰词 + 1 队列灰词，按照片出现顺序交错
+const r23 = store.savePhotoSession([
+  { w: 'newa', m: 'n. 新A', p: 'pA' },
+  { w: bank23[0].w, gray: true },   // 教材灰词（静态批1已学）
+  { w: 'grayq', gray: true },       // 队列灰词（拍照已学）
+  { w: bank23[40].w, gray: true },  // 教材灰词（待学，游标后 → 顺带巩固）
+  { w: 'newb', m: 'n. 新B' }        // 新词无音标
+]);
+eq(r23, { added: 2, gray: 3, total: 5 }, '收录结果：新收2 + 灰词3 = 会话5词');
+eq(store.getAccountPhotoWords('junior').length, 3, '队列只增新词（grayq/newa/newb，灰词不入队）');
+const ses23 = store.getPhotoSessions('junior');
+eq(ses23.length, 1, '收录后1个待学会话');
+eq(ses23[0].words.map(w => w.w).join(','),
+  ['newa', bank23[0].w, 'grayq', bank23[40].w, 'newb'].join(','),
+  '会话词单按照片出现顺序（新词灰词交错）');
+eq(ses23[0].words[0].m, 'n. 新A', '新词带查义释义');
+eq(ses23[0].words[1].m, bank23[0].m, '教材灰词取教材释义快照');
+eq(ses23[0].words[2].m, 'n. 队列灰词', '队列灰词取队列释义快照');
+eq(ses23[0].words[2].p, 'ɡreɪ', '灰词音标随快照带入');
+
+// 出批：会话整体成批（batchNo 接续 = 第3批）
+const b23 = store.nextBatch();
+eq(b23.photo === true && b23.words.length === 5 && b23.batchNo === 3, true, '会话整体出批（5词，不受35上限）');
+// 总览：当前批 = 待学会话；已学按词去重（灰词不重复计）
+const ov23 = store.getOverview();
+eq(ov23.learned, 36, '已学36词（35静态+grayq），灰词未入批前不虚增');
+const cur23 = ov23.batches.filter(b => b.state === 'current')[0];
+eq(cur23.count, 5, '总览：待学会话整体成批5词');
+eq(cur23.words.some(w => w.w === 'grayq'), true, '总览当前批含队列灰词');
+// 学完会话移除，回落静态（游标不动、顺带巩固不跳词）
+store.saveLearnedBatch(b23);
+eq(store.getPhotoSessions('junior').length, 0, '学完会话自动移除');
+const b23n = store.nextBatch();
+eq(b23n.photo, undefined, '会话学完回落静态批次');
+eq(b23n.start, 35, '静态游标不受拍照批影响（第35位起）');
+eq(b23n.words[0].w, bank23[35].w, '静态顺序不跳词（bank23[40] 留在原顺序，走到再学）');
+// 统计按词去重：36 + 2 新词 + 1 个首次学习的教材灰词（bank23[40]）= 39；灰词重复不计
+eq(store.getStats().learned, 39, '统计已学按词去重（拍照批含灰词不重复计数）');
+eq(store.getPetInfo().learned, 39, '宠物成长口径同步去重');
+eq(store.getAccountsOverview().find(x => x.id === 'junior').learned, 39, '家庭榜口径同步去重');
+
+// 复习：同词多批同日到期 → 按词去重只复习一次，结果同步应用各批
+setDay(2027, 3, 2);
+const s23 = store.buildReviewSession();
+eq(s23.due.length, 3, '3批同日到期（拍照grayq批 + 静态批1 + 拍照会话批）');
+eq(s23.items.length, 39, '复习条目按词去重：35静态 + grayq + newa/bank23[40]/newb');
+store.finishReview(s23, { newa: true });
+eq(store.getRecords()[2].wrongPool.map(w => w.w).join(','), 'newa', '答错词进拍照批遗忘池');
+eq(store.getRecords()[0].wrongPool.length, 0, '灰词答对不污染旧批遗忘池');
+eq(store.getWrongWords().find(w => w.word === 'newa').batches.join(','), '3', '错词本标记拍照批号');
+
+// 删除联动：待学会话词单同步清理，会话删空自动移除
+eq(store.addToAccountPhoto([{ w: 'pd1', m: 'n. 待删1' }, { w: 'pd2', m: 'n. 待删2' }, { w: 'pd3', m: 'n. 待删3' }]), 3, '再造待学会话');
+store.removeWords(['pd2']);
+eq(store.getPhotoSessions('junior')[0].words.map(w => w.w).join(','), 'pd1,pd3', '会话词单同步移除已删词');
+store.removeWords(['pd1', 'pd3']);
+eq(store.getPhotoSessions('junior').length, 0, '会话删空自动移除');
+
+// ---- 场景24：会话键首次读取的 legacy 初始化（R14 队列未学词自动包会话） ----
+storage.vocab_records_junior = []; storage.vocab_cursor_junior = 0;
+storage.vocab_photo_words_junior = [
+  { w: 'lg1', m: 'n. 旧1', addedAt: 1 },
+  { w: 'lg2', m: 'n. 旧2', addedAt: 2 }
+];
+delete storage.vocab_photo_sessions_junior; // 模拟升级后首次读取（键不存在）
+const ses24 = store.getPhotoSessions('junior');
+eq(ses24.length, 1, 'legacy 初始化：未学队列词包成1个历史会话');
+eq(ses24[0].words.map(w => w.w).join(','), 'lg1,lg2', '会话含全部未学队列词');
+const pb24 = store.nextBatch();
+eq(pb24.photo === true && pb24.words.length === 2, true, 'legacy 会话整体优先出批');
+// 已进学习记录的队列词不重复入会话
+storage.vocab_records_junior = [{
+  batchId: 'blg', batchNo: 1, date: '2027-03-01', start: -1, end: -1,
+  words: [{ w: 'lg1', m: 'n. 旧1' }], reviewsDone: 1, wrongPool: [], reviewHistory: []
+}];
+delete storage.vocab_photo_sessions_junior;
+eq(store.getPhotoSessions('junior')[0].words.map(w => w.w).join(','), 'lg2', '已学词不进 legacy 会话');
 
 
 

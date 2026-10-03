@@ -35,33 +35,80 @@ function switchAccount(id) {
   return false;
 }
 
-/* ---------- 拍照生词（R14：并入当前账号的优先学习队列，原独立 photo 账号退役） ---------- */
-// 每个真人账号自己的队列 vocab_photo_words_<accountId>（{ w, m, p, addedAt }）；
-// 未学拍照词在 nextBatch 中优先于静态教材词（保持「拍了就学」），学完自动回落教材顺序。
+/* ---------- 拍照生词（R14：并入当前账号；R15：拍照会话整体出批） ---------- */
+// 每个真人账号两条存储：队列 vocab_photo_words_<accountId>（{ w, m, p, addedAt }，去重与
+// 词库页展示）+ 拍照会话 vocab_photo_sessions_<accountId>（{ id, createdAt, words }，一次
+// 拍照的完整词单，含已收录灰词快照）。nextBatch 以会话为单位整体出批（「拍了就学」，
+// R15 起不受 BATCH_SIZE 限制），学完由 saveLearnedBatch 移除会话，全部学完回落教材顺序。
 function photoWordsKey(id) { return 'vocab_photo_words_' + id; }
+function photoSessionsKey(id) { return 'vocab_photo_sessions_' + id; }
 
 function getAccountPhotoWords(id) {
   return wx.getStorageSync(photoWordsKey(id)) || [];
 }
 
-// 收录拍照词到当前账号：与该账号有效静态库、已有队列去重后追加，返回实际新增条数
-function addToAccountPhoto(words) {
-  const acc = currentAccount();
-  const queue = getAccountPhotoWords(acc.id);
-  const seen = {};
-  bankOf(acc.id).forEach(function (x) { seen[x.w.toLowerCase()] = true; });
-  queue.forEach(function (x) { seen[x.w.toLowerCase()] = true; });
-  const added = [];
-  (words || []).forEach(function (w) {
-    if (!w || !w.w || seen[w.w.toLowerCase()]) return;
-    seen[w.w.toLowerCase()] = true;
-    added.push({ w: w.w, m: w.m || '', p: w.p || '', addedAt: Date.now() });
-  });
-  if (added.length) wx.setStorageSync(photoWordsKey(acc.id), queue.concat(added));
-  return added.length;
+// 会话键首次读取时初始化：R14 遗留的未学队列词自动包成一个历史会话（继续优先学习）
+function getPhotoSessions(id) {
+  const v = wx.getStorageSync(photoSessionsKey(id));
+  if (v !== '' && v !== null && v !== undefined) return v;
+  const rs = wx.getStorageSync('vocab_records_' + id) || [];
+  const learned = {};
+  rs.forEach(function (r) { r.words.forEach(function (x) { learned[x.w] = true; }); });
+  const pending = (wx.getStorageSync(photoWordsKey(id)) || []).filter(function (x) { return !learned[x.w]; });
+  const init = pending.length ? [{ id: 'legacy-' + id, createdAt: Date.now(), words: pending }] : [];
+  wx.setStorageSync(photoSessionsKey(id), init);
+  return init;
 }
 
-// 当前账号未学拍照词（队列中尚未进入任何批次快照的词）
+// R15：收录一次拍照 = 建立一个「拍照会话」。list = [{ w, gray?, m?, p? }]（候选页出现顺序）：
+// 新词（gray 空）与有效库/队列去重后入队列并进会话；灰词不入队列、不重复收录，词义音标
+// 从当前账号词库/队列取快照（不耗查义额度）。返回 { added, gray, total }，total=0 = 无可收录。
+function savePhotoSession(list) {
+  const acc = currentAccount();
+  const bank = bankOf(acc.id);
+  const queue = getAccountPhotoWords(acc.id);
+  const seen = {};
+  bank.forEach(function (x) { seen[x.w.toLowerCase()] = true; });
+  queue.forEach(function (x) { seen[x.w.toLowerCase()] = true; });
+  function findSaved(w) {
+    const lw = (w || '').toLowerCase();
+    for (var i = 0; i < bank.length; i++) if (bank[i].w.toLowerCase() === lw) return bank[i];
+    for (var j = 0; j < queue.length; j++) if (queue[j].w.toLowerCase() === lw) return queue[j];
+    return null;
+  }
+  const words = [];
+  const added = [];
+  let gray = 0;
+  (list || []).forEach(function (it) {
+    if (!it || !it.w) return;
+    const lw = it.w.toLowerCase();
+    if (it.gray) {
+      const src = findSaved(it.w);
+      if (!src) return; // 词库/队列已无此词（如收录前被删）→ 跳过
+      gray++;
+      words.push({ w: src.w, m: src.m || '', p: src.p || '' });
+      return;
+    }
+    if (seen[lw]) return;
+    seen[lw] = true;
+    added.push({ w: it.w, m: it.m || '', p: it.p || '', addedAt: Date.now() });
+    words.push({ w: it.w, m: it.m || '', p: it.p || '' });
+  });
+  if (added.length) wx.setStorageSync(photoWordsKey(acc.id), queue.concat(added));
+  if (!words.length) return { added: 0, gray: 0, total: 0 };
+  const sessions = getPhotoSessions(acc.id);
+  sessions.push({ id: 's' + Date.now() + '-' + sessions.length, createdAt: Date.now(), words: words });
+  wx.setStorageSync(photoSessionsKey(acc.id), sessions);
+  return { added: added.length, gray: gray, total: words.length };
+}
+
+// 纯新词收录（等价于 savePhotoSession 全新词；保留旧入口兼容迁移等调用）
+function addToAccountPhoto(words) {
+  return savePhotoSession(words || []).added;
+}
+
+// 当前账号未学拍照词（队列中尚未进入任何批次快照的词；R15 后出批由会话驱动，本函数
+// 仅用于队列体检与迁移断言）
 function unlearnedPhotoWords() {
   const learned = {};
   getRecords().forEach(function (r) {
@@ -102,12 +149,21 @@ function migratePhotoAccount(targetId) {
     rs.forEach(function (rec) {
       rec.words.forEach(function (x) { migratedLearned[x.w] = true; });
     });
+    const migratedUnlearned = [];
     bank.forEach(function (x) {
       if (!x || !x.w || seen[x.w.toLowerCase()] || migratedLearned[x.w]) return;
       seen[x.w.toLowerCase()] = true;
       queue.push({ w: x.w, m: x.m || '', p: x.p || '', addedAt: x.addedAt || Date.now() });
+      migratedUnlearned.push({ w: x.w, m: x.m || '', p: x.p || '' });
     });
     wx.setStorageSync(photoWordsKey(targetId), queue);
+    // R15：会话键已初始化时迁移的未学词同步包成会话；未初始化则由首次读取的
+    // legacy 初始化自动包裹（生产时序：onLaunch 先迁移、页面再读会话，走后者）
+    if (migratedUnlearned.length && wx.getStorageSync(photoSessionsKey(targetId)) !== '') {
+      const sessions = getPhotoSessions(targetId);
+      sessions.push({ id: 'mig-' + Date.now() + '-' + sessions.length, createdAt: Date.now(), words: migratedUnlearned });
+      wx.setStorageSync(photoSessionsKey(targetId), sessions);
+    }
   }
   // ② 学习记录追加进目标账号（start/end 置 -1 表示拍照来源，不占静态游标语义）
   if (hasRecords) {
@@ -134,7 +190,7 @@ function migratePhotoAccount(targetId) {
 }
 
 // 词库页数据（R09）：当前账号词条附学习状态，状态从批次快照反查
-// （收录/词库内无重复，一词至多属于一个批次）。batchNo=0 表示待学习。
+// （R15 起一词可属多批——拍照批含已收录灰词，状态显示所在最新批次）。batchNo=0 表示待学习。
 // 拍照与静态账号通用（R09-2：全账号可删）。
 function getBankEntries() {
   const status = {};
@@ -205,6 +261,16 @@ function removeWords(words) {
   const queue = getAccountPhotoWords(acc.id);
   const keptQ = queue.filter(function (x) { return !set[x.w]; });
   if (keptQ.length !== queue.length) wx.setStorageSync(photoWordsKey(acc.id), keptQ);
+  // R15：待学会话词单同步清理（词删则移出会话，会话删空则整会话移除）
+  const sessions = getPhotoSessions(acc.id);
+  let sesChanged = false;
+  const keptSessions = [];
+  sessions.forEach(function (s) {
+    const ws = (s.words || []).filter(function (x) { return !set[x.w]; });
+    if (ws.length !== (s.words || []).length) sesChanged = true;
+    if (ws.length) keptSessions.push({ id: s.id, createdAt: s.createdAt, words: ws });
+  });
+  if (sesChanged) wx.setStorageSync(photoSessionsKey(acc.id), keptSessions);
   // 静态词库：软删除
   const bank = currentBank();
   const kept = bank.filter(function (x) { return !set[x.w]; });
@@ -275,17 +341,18 @@ function diffDays(a, b) {
 }
 
 /* ---------- 新单词 ---------- */
-// 取下一批单词：R14 起当前账号未学拍照词优先成批（「拍了就学」），队列空后回落
-// 静态词库顺序（游标推进）。词库与队列都用完返回 null。
+// 取下一批单词：R15 起待学拍照会话整体优先出批（一次拍照 = 一个学习单元，「拍了就学」，
+// 不受 BATCH_SIZE 限制——用户拍板：识别多少学多少），会话学完回落静态词库顺序（游标
+// 推进）。词库与队列都用完返回 null。
 function nextBatch() {
-  const fresh = unlearnedPhotoWords();
-  if (fresh.length) {
-    const list = fresh.slice(0, BATCH_SIZE);
+  const ses = getPhotoSessions(currentAccount().id).find(function (s) { return s.words && s.words.length; });
+  if (ses) {
     return {
       batchNo: getRecords().length + 1,
       start: -1, end: -1, // 拍照批不占静态游标
-      words: list,
-      photo: true
+      words: ses.words,
+      photo: true,
+      sessionId: ses.id
     };
   }
   const words = currentBank();
@@ -304,7 +371,7 @@ function nextBatch() {
 function saveLearnedBatch(batch) {
   const rs = getRecords();
   rs.push({
-    batchId: 'b' + Date.now(),
+    batchId: 'b' + Date.now() + '-' + rs.length, // 带序号防同毫秒连学两批撞 id
     batchNo: rs.length + 1,
     date: todayStr(),
     start: batch.start,
@@ -315,7 +382,17 @@ function saveLearnedBatch(batch) {
     reviewHistory: []          // 每次复习的记录 {date, round, total, wrong}
   });
   saveRecords(rs);
-  if (!batch.photo) setCursor(batch.end + 1); // 拍照批不动静态游标（R14）
+  if (batch.photo) {
+    // R15：会话整体出批，学完即从待学会话列表移除
+    if (batch.sessionId) {
+      const id = currentAccount().id;
+      wx.setStorageSync(photoSessionsKey(id), getPhotoSessions(id).filter(function (s) {
+        return s.id !== batch.sessionId;
+      }));
+    }
+  } else {
+    setCursor(batch.end + 1); // 静态批推进游标；拍照批不动（R14）
+  }
 }
 
 /* ---------- 复习调度 ---------- */
@@ -424,11 +501,18 @@ function removeWrongWord(word) {
   return removed;
 }
 
+// R15：一词可属多批（拍照批含已收录灰词），已学词数按词去重统计（防宠物/家庭榜虚增）
+function distinctLearnedCount(rs) {
+  const set = {};
+  rs.forEach(function (r) { r.words.forEach(function (x) { set[x.w] = true; }); });
+  return Object.keys(set).length;
+}
+
 /* ---------- 教程总览（整库批次分章：让用户看到全貌与每批状态） ---------- */
 // R09：已学批次直接按记录快照成章（删除词条后仍与实际复习内容一致，也修复了
-// 拍照本「末批不满后再收录」时旧算法按词库下标重切导致的错位）；待学批次从游标
-// 起按 35 词切分，首个待学批为当前批。编号在快照/词库间连续累计，静态账号
-// （词库不变、批次恒满 35）输出与旧算法一致。
+// 拍照本「末批不满后再收录」时旧算法按词库下标重切导致的错位）；待学批次：拍照会话
+// 各整体成批（R15：优先、不受 35 词上限），静态词从游标起按 35 词切分，首个待学批为
+// 当前批。编号在快照/词库间连续累计，静态账号（词库不变、批次恒满 35）输出与旧算法一致。
 function getOverview() {
   const bank = currentBank();
   const records = getRecords();
@@ -453,37 +537,37 @@ function getOverview() {
     });
     idx += rec.words.length;
   });
-  // 待学批与 nextBatch 一致：拍照词独立成批（优先），静态词另起批次，不混批（R14）
-  const photoPending = unlearnedPhotoWords();
-  const staticPending = bank.slice(cursor);
+  // 待学批与 nextBatch 一致：拍照会话各整体成批（优先、不与静态混批，R15 不受 35 上限），
+  // 静态词另起批次按 35 切分（R14）
   function pushPending(list) {
-    for (let p = 0; p < list.length; p += BATCH_SIZE) {
-      const count = Math.min(BATCH_SIZE, list.length - p);
-      batches.push({
-        batchNo: batches.length + 1,
-        batchId: '',
-        start: idx,
-        end: idx + count - 1,
-        count: count,
-        state: batches.length === records.length ? 'current' : 'todo', // 首个待学批：打开「新单词」就是它
-        reviewsDone: 0,
-        rounds: rounds,
-        wrongCount: 0,
-        date: '',
-        words: list.slice(p, p + BATCH_SIZE),
-        reviewHistory: []
-      });
-      idx += count;
-    }
+    batches.push({
+      batchNo: batches.length + 1,
+      batchId: '',
+      start: idx,
+      end: idx + list.length - 1,
+      count: list.length,
+      state: batches.length === records.length ? 'current' : 'todo', // 首个待学批：打开「新单词」就是它
+      reviewsDone: 0,
+      rounds: rounds,
+      wrongCount: 0,
+      date: '',
+      words: list,
+      reviewHistory: []
+    });
+    idx += list.length;
   }
-  pushPending(photoPending);
-  pushPending(staticPending);
-  const pending = photoPending.concat(staticPending);
+  getPhotoSessions(currentAccount().id).forEach(function (s) {
+    if (s.words && s.words.length) pushPending(s.words);
+  });
+  const staticPending = bank.slice(cursor);
+  for (var p = 0; p < staticPending.length; p += BATCH_SIZE) {
+    pushPending(staticPending.slice(p, p + BATCH_SIZE));
+  }
   const totalWords = bank.length + getAccountPhotoWords(currentAccount().id).length;
   return {
     totalBatches: batches.length,
     totalWords: totalWords,
-    learned: totalWords - pending.length, // R14：含已学拍照词（静态游标只覆盖教材词）
+    learned: distinctLearnedCount(records), // R15：按词去重（灰词在旧批已计，不因拍照批重复计数）
     learnedBatches: records.length,
     currentBatchNo: records.length + 1,
     batches: batches
@@ -575,8 +659,9 @@ function getActiveDays() {
 }
 
 /* ---------- 宠物养成（R12，R11 二期）：纯本地正向激励 ---------- */
-// 成长驱动 = 当前账号累计已学词数（各批快照 words 之和）；只升不降展示，词删除导致
-// 的档位回落由页面静默对齐存量记录。门槛参数为拍脑袋的趣味值，可调。
+// 成长驱动 = 当前账号累计已学词数（R15：按词去重——拍照批含已收录灰词，防重复计数
+// 虚增档位）；只升不降展示，词删除导致的档位回落由页面静默对齐存量记录。门槛参数为
+// 拍脑袋的趣味值，可调。
 var PET_STAGES = [
   { min: 0,   emoji: '🥚', name: '蛋·沉睡中' },
   { min: 35,  emoji: '🐣', name: '破壳' },
@@ -588,7 +673,7 @@ var PET_STAGES = [
 
 // 当前账号宠物状态：{ stage, emoji, name, learned, nextEmoji, nextName, remaining, pct, maxed }
 function getPetInfo() {
-  const learned = getRecords().reduce(function (s, r) { return s + r.words.length; }, 0);
+  const learned = distinctLearnedCount(getRecords());
   let stage = 0;
   for (let i = 0; i < PET_STAGES.length; i++) {
     if (learned >= PET_STAGES[i].min) stage = i;
@@ -613,11 +698,12 @@ function getPetInfo() {
 
 /* ---------- 家庭榜（R13：不切账号读取各账号进度） ---------- */
 // 各账号 { id, name, dynamic, learned, streak, petEmoji }，按已学词数降序；
-// streak 与 getStreak 同算法、pet 档位与 getPetInfo 同门槛，仅数据源改为指定账号的存储键
+// streak 与 getStreak 同算法、pet 档位与 getPetInfo 同门槛，仅数据源改为指定账号的
+// 存储键；learned 同 R15 按词去重
 function getAccountsOverview() {
   return ACCOUNTS.list.map(function (acc) {
     const rs = wx.getStorageSync('vocab_records_' + acc.id) || [];
-    const learned = rs.reduce(function (s, r) { return s + r.words.length; }, 0);
+    const learned = distinctLearnedCount(rs);
     const days = {};
     rs.forEach(function (r) {
       (r.reviewHistory || []).forEach(function (h) { days[h.date] = true; });
@@ -643,12 +729,11 @@ function getAccountsOverview() {
 /* ---------- 统计 ---------- */
 function getStats() {
   const rs = getRecords();
-  const learned = rs.reduce(function (s, r) { return s + r.words.length; }, 0);
   const session = buildReviewSession();
   return {
     account: currentAccount(),
     batches: rs.length,
-    learned: learned,
+    learned: distinctLearnedCount(rs), // R15：按词去重（拍照批含已收录灰词）
     totalWords: currentBank().length + getAccountPhotoWords(currentAccount().id).length,
     dueCount: session.due.length,
     todayItems: session.items.length,
@@ -669,7 +754,9 @@ module.exports = {
   bankOf: bankOf,
   removeWords: removeWords,
   getAccountPhotoWords: getAccountPhotoWords,
+  getPhotoSessions: getPhotoSessions,
   addToAccountPhoto: addToAccountPhoto,
+  savePhotoSession: savePhotoSession,
   unlearnedPhotoWords: unlearnedPhotoWords,
   inCurrentBank: inCurrentBank,
   migratePhotoAccount: migratePhotoAccount,

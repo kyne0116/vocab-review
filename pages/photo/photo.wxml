@@ -36,7 +36,7 @@
   <block wx:if="{{stage === 'pick'}}">
     <view class="card">
       <view class="list-title">识别到 {{candidates.length}} 个单词（已勾选 {{checkedCount}}）</view>
-      <view class="text-muted hint">灰色「已收录」表示与内置词库重复，不可收录。点右侧红色「修改」可改单词拼写{{llmOk ? '，长按单词可 AI 核对' : '' }}。</view>
+      <view class="text-muted hint">灰色「已收录」= 本账号词库已有或以前拍过，不重复收录，但会随本批一起学习。点右侧红色「修改」可改单词拼写{{llmOk ? '，长按单词可 AI 核对' : '' }}。</view>
       <view class="glue-tip" wx:if="{{glueCount > 0}}">
         ⚠️ 另有 {{glueCount}} 段连串文字被过滤（文字过小或多列版面粘连），以下结果可能不完整；建议对原页面近距离重拍。
       </view>
@@ -89,7 +89,7 @@
         </view>
       </view>
     </view>
-    <button class="btn-primary act-btn" bindtap="save">收录 {{okCount}} 词</button>
+    <button class="btn-primary act-btn" bindtap="save">收录本批（新 {{okCount}} + 已收 {{knownCount}}）</button>
     <view class="text-muted pending-tip" wx:if="{{entries.length - okCount > 0}}">
       {{entries.length - okCount}} 个待补义词暂不收录，可通过重试、AI 纠错或点「修改」改单词补齐后再收录
     </view>
@@ -100,11 +100,13 @@
   <block wx:if="{{stage === 'done'}}">
     <view class="card center">
       <view class="done-icon">✅</view>
-      <view class="done-title">已收录 {{addedCount}} 个词</view>
+      <view class="done-title">本批共 {{totalCount}} 词</view>
+      <view class="text-muted" wx:if="{{grayCount > 0}}">新收录 {{addedCount}} 词 + 已收录 {{grayCount}} 词随批学习</view>
+      <view class="text-muted" wx:else>新收录 {{addedCount}} 词</view>
       <view class="text-muted" wx:if="{{entries.length - okCount > 0}}">
         {{entries.length - okCount}} 个待补义词未收录
       </view>
-      <view class="text-muted">已加入当前账号「{{accName}}」，点「新单词」将优先学习这些生词。</view>
+      <view class="text-muted">已加入当前账号「{{accName}}」，点「新单词」将优先学习这批拍照生词。</view>
       <button class="btn-primary act-btn" bindtap="goStudy">去学习拍照生词</button>
       <button class="btn-plain act-btn" bindtap="again">继续拍照收词</button>
     </view>
