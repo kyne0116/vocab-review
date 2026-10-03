@@ -1,0 +1,357 @@
+{
+ "happy": {
+  "rel_word": {
+   "word": "happy",
+   "stem": "happy",
+   "rels": [
+    {
+     "rel": {
+      "pos": "adv.",
+      "words": [
+       {
+        "word": "happily",
+        "tran": " 快乐地；幸福地；幸运地；恰当地"
+       }
+      ]
+     }
+    },
+    {
+     "rel": {
+      "pos": "n.",
+      "words": [
+       {
+        "word": "happiness",
+        "tran": " 幸福"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "syno": {
+   "synos": [
+    {
+     "syno": {
+      "pos": "adj.",
+      "ws": [
+       {
+        "w": "pleased"
+       },
+       {
+        "w": "glad"
+       },
+       {
+        "w": "blessed"
+       },
+       {
+        "w": "smart"
+       }
+      ],
+      "tran": "幸福的；高兴的；巧妙的"
+     }
+    }
+   ],
+   "word": "happy"
+  },
+  "blng_sents_part": {
+   "sentence-pair": [
+    {
+     "sentence": "Happy birthday, sweetheart.",
+     "sentence-eng": "<b>Happy</b> birthday, sweetheart.",
+     "sentence-translation": "生日快乐，亲爱的。"
+    },
+    {
+     "sentence": "\"Happy Easter,\" he yelled.",
+     "sentence-eng": "\"<b>Happy</b> Easter,\" he yelled.",
+     "sentence-translation": "“复活节快乐，”他喊道。"
+    },
+    {
+     "sentence": "She had a happy childhood.",
+     "sentence-eng": "She had a <b>happy</b> childhood.",
+     "sentence-translation": "她有一个幸福的童年。"
+    }
+   ]
+  }
+ },
+ "increase": {
+  "rel_word": {
+   "word": "increase",
+   "stem": "increase",
+   "rels": [
+    {
+     "rel": {
+      "pos": "adj.",
+      "words": [
+       {
+        "word": "increasing",
+        "tran": " 越来越多的，渐增的"
+       }
+      ]
+     }
+    },
+    {
+     "rel": {
+      "pos": "v.",
+      "words": [
+       {
+        "word": "increasing",
+        "tran": " 增加，加大（increase的ing形式）"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "syno": {
+   "synos": [
+    {
+     "syno": {
+      "pos": "n.",
+      "ws": [
+       {
+        "w": "enhancement"
+       },
+       {
+        "w": "growth"
+       },
+       {
+        "w": "gain"
+       },
+       {
+        "w": "raising"
+       },
+       {
+        "w": "advance"
+       }
+      ],
+      "tran": "增加，增长；提高"
+     }
+    },
+    {
+     "syno": {
+      "pos": "vi.",
+      "ws": [
+       {
+        "w": "improve"
+       },
+       {
+        "w": "gain"
+       },
+       {
+        "w": "accelerate"
+       },
+       {
+        "w": "breed"
+       },
+       {
+        "w": "make"
+       }
+      ],
+      "tran": "增加，增大；繁殖"
+     }
+    },
+    {
+     "syno": {
+      "pos": "vt.",
+      "ws": [
+       {
+        "w": "enhance"
+       },
+       {
+        "w": "boost"
+       },
+       {
+        "w": "jack"
+       },
+       {
+        "w": "mount"
+       },
+       {
+        "w": "hot"
+       }
+      ],
+      "tran": "增加，加大"
+     }
+    }
+   ],
+   "word": "increase"
+  },
+  "blng_sents_part": {
+   "sentence-pair": [
+    {
+     "sentence": "Prices will increase pro rata.",
+     "sentence-eng": "Prices will <b>increase</b> pro rata.",
+     "sentence-translation": "价格将相应提高。"
+    },
+    {
+     "sentence": "We need to increase productivity.",
+     "sentence-eng": "We need to <b>increase</b> productivity.",
+     "sentence-translation": "我们需要提高生产力。"
+    },
+    {
+     "sentence": "Car usage is predicted to increase.",
+     "sentence-eng": "Car usage is predicted to <b>increase</b>.",
+     "sentence-translation": "汽车的使用率预计会增长。"
+    }
+   ]
+  }
+ },
+ "develop": {
+  "rel_word": {
+   "word": "develop",
+   "stem": "develop",
+   "rels": [
+    {
+     "rel": {
+      "pos": "adj.",
+      "words": [
+       {
+        "word": "developed",
+        "tran": " 发达的（国家或地区）；成熟的"
+       },
+       {
+        "word": "developing",
+        "tran": " 发展中的"
+       },
+       {
+        "word": "developmental",
+        "tran": " 发展的；启发的"
+       }
+      ]
+     }
+    },
+    {
+     "rel": {
+      "pos": "n.",
+      "words": [
+       {
+        "word": "development",
+        "tran": " 发展；开发；发育；住宅小区（专指由同一开发商开发的）；[摄] 显影"
+       },
+       {
+        "word": "developing",
+        "tran": " [摄] 显影"
+       },
+       {
+        "word": "developer",
+        "tran": " 开发者；[摄] 显影剂"
+       }
+      ]
+     }
+    },
+    {
+     "rel": {
+      "pos": "v.",
+      "words": [
+       {
+        "word": "developing",
+        "tran": " 发展（develop的ing形式）"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "syno": {
+   "synos": [
+    {
+     "syno": {
+      "pos": "vt.",
+      "ws": [
+       {
+        "w": "exploit"
+       },
+       {
+        "w": "open up"
+       }
+      ],
+      "tran": "开发；进步；使成长；使显影"
+     }
+    },
+    {
+     "syno": {
+      "pos": "vi.",
+      "ws": [
+       {
+        "w": "grow"
+       },
+       {
+        "w": "flower"
+       }
+      ],
+      "tran": "发育；生长；进化；显露"
+     }
+    }
+   ],
+   "word": "develop"
+  },
+  "blng_sents_part": {
+   "sentence-pair": [
+    {
+     "sentence": "How fast would the disease develop?",
+     "sentence-eng": "How fast would the disease <b>develop</b>?",
+     "sentence-translation": "这种疾病发展有多快？"
+    },
+    {
+     "sentence": "We need to develop local industries.",
+     "sentence-eng": "We need to <b>develop</b> local industries.",
+     "sentence-translation": "我们需要发展地方工业。"
+    },
+    {
+     "sentence": "These clashes could develop into open warfare.",
+     "sentence-eng": "These clashes could <b>develop</b> into open warfare.",
+     "sentence-translation": "这些冲突可能会发展成公开的战争。"
+    }
+   ]
+  }
+ },
+ "apple": {
+  "syno": {
+   "synos": [
+    {
+     "syno": {
+      "pos": "n.",
+      "ws": [
+       {
+        "w": "customer"
+       },
+       {
+        "w": "fellow"
+       },
+       {
+        "w": "egg"
+       },
+       {
+        "w": "guy"
+       },
+       {
+        "w": "bird"
+       }
+      ],
+      "tran": "[园艺]苹果；家伙"
+     }
+    }
+   ],
+   "word": "apple"
+  },
+  "blng_sents_part": {
+   "sentence-pair": [
+    {
+     "sentence": "She crunched her apple noisily.",
+     "sentence-eng": "She crunched her <b>apple</b> noisily.",
+     "sentence-translation": "她吃苹果发出嘎嚓嘎嚓的声音。"
+    },
+    {
+     "sentence": "Someone threw an apple core.",
+     "sentence-eng": "Someone threw an <b>apple</b> core.",
+     "sentence-translation": "有人扔了一个苹果核。"
+    },
+    {
+     "sentence": "This apple is full of worms.",
+     "sentence-eng": "This <b>apple</b> is full of worms.",
+     "sentence-translation": "这个苹果生满了虫子。"
+    }
+   ]
+  }
+ }
+}

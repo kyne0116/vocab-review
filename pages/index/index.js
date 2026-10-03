@@ -14,21 +14,15 @@ Page({
     overviewCount: 0,
     overviewPct: 0,
     batchDots: [],
-    versionLine: ''
+    streak: 0,
+    pet: null,        // R12 宠物养成
+    petBounce: false,
+    family: [],       // R13 家庭榜
+    currentAccountId: ''
   },
   onShow: function () {
     this.refresh();
-    this.setData({ versionLine: this.buildVersionLine() });
-  },
-  // 首页底部版本行：代码内镜像版本号（上传时同步修改 app.js）+ 运行渠道（开发/体验/正式版）
-  buildVersionLine: function () {
-    const g = getApp().globalData;
-    let envText = '';
-    try {
-      const env = wx.getAccountInfoSync().miniProgram.envVersion;
-      envText = { develop: '开发版', trial: '体验版', release: '正式版' }[env] || '';
-    } catch (e) { /* 低版本基础库无此 API，仅省略渠道 */ }
-    return 'v' + g.appVersion + '（' + g.releaseTime + '）' + (envText ? ' · ' + envText : '');
+    this.checkPetUp(); // R12：检测进化并庆祝
   },
   refresh: function () {
     const s = store.getStats();
@@ -48,8 +42,56 @@ Page({
       wrongCount: s.wrongCount,
       overviewCount: ov.totalBatches,
       overviewPct: pct,
-      batchDots: dots
+      batchDots: dots,
+      streak: store.getStreak(),
+      pet: store.getPetInfo(),
+      family: store.getAccountsOverview(),
+      currentAccountId: store.currentAccount().id
     });
+  },
+
+  // 家庭榜行点击 = 切换到该账号（R13）
+  pickAccount: function (e) {
+    const id = e.currentTarget.dataset.id;
+    if (!id || id === this.data.currentAccountId) return;
+    if (store.switchAccount(id)) {
+      wx.showToast({ title: '已切换', icon: 'none', duration: 800 });
+      this.refresh();
+      this.checkPetUp();
+    }
+  },
+
+  /* ---------- R12 宠物养成 ---------- */
+  // 进化检测：与上次看到的档位（vocab_pet_stage_<accountId>）比较，升档弹庆祝，降档（删词等）静默对齐
+  checkPetUp: function () {
+    if (!this.data.pet) return;
+    const key = 'vocab_pet_stage_' + store.currentAccount().id;
+    let last = '';
+    try { last = wx.getStorageSync(key); } catch (e) { return; }
+    const stage = this.data.pet.stage;
+    if (last === '' || last === null) {
+      try { wx.setStorageSync(key, stage); } catch (e) { /* 存储失败跳过庆祝检测 */ }
+      return;
+    }
+    if (stage !== last) {
+      if (stage > last) {
+        const info = this.data.pet;
+        wx.showModal({
+          title: '🎉 进化时刻',
+          content: '啾啾进化为 ' + info.emoji + ' ' + info.name + '！继续带它飞向词海吧！',
+          showCancel: false,
+          confirmText: '太棒了'
+        });
+      }
+      try { wx.setStorageSync(key, stage); } catch (e) { /* 同上 */ }
+    }
+  },
+  tapPet: function () {
+    const that = this;
+    this.setData({ petBounce: true });
+    setTimeout(function () { that.setData({ petBounce: false }); }, 700);
+    const lines = ['今天也要一起背单词哦！', '每学会一个词，我就长大一点点！', '复习做得棒，我最开心啦！', '带我飞向更大的词海吧！'];
+    wx.showToast({ title: lines[Math.floor(Math.random() * lines.length)], icon: 'none', duration: 2000 });
   },
   onSwitchAccount: function () {
     const accounts = store.getAccounts();

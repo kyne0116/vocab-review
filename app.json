@@ -8,7 +8,8 @@
     "pages/wrong/wrong",
     "pages/overview/overview",
     "pages/photo/photo",
-    "pages/bank/bank"
+    "pages/bank/bank",
+    "pages/spell/spell"
   ],
   "window": {
     "navigationBarBackgroundColor": "#07c160",

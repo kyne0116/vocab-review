@@ -1,0 +1,36 @@
+<view class="container">
+  <!-- 默写进行中 -->
+  <block wx:if="{{state === 'quiz'}}">
+    <view class="card spell-card {{wrongFlash ? 'flash-no' : ''}} {{okFlash ? 'flash-ok' : ''}}">
+      <view class="spell-progress text-muted">{{done}} / {{total}} 已拼对 · 错词自动回队重拼</view>
+      <view class="spell-meaning">{{word.m}}</view>
+      <view class="spell-hint" bindtap="hint">🔊 听音提示</view>
+
+      <view class="spell-slots {{wrongFlash ? 'shake' : ''}}">
+        <view class="slot {{s.filled ? 'on' : ''}} {{s.cur ? 'cur' : ''}} {{s.space ? 'gap' : ''}}"
+              wx:for="{{slots}}" wx:key="index"></view>
+      </view>
+
+      <view class="spell-fb ok" wx:if="{{okFlash}}">✓ 拼对了！{{petEmoji}}</view>
+      <view class="spell-fb no" wx:if="{{wrongFlash}}">✗ 差一点，整词重打</view>
+    </view>
+
+    <input class="spell-input" value="{{inputValue}}" focus="{{inputFocus}}" hold-keyboard
+           bindinput="onSpellInput" placeholder="在这里输入英文单词" placeholder-class="spell-ph" />
+    <view class="text-muted spell-tip">看中文拼写英文 · 错一个字母整词从头重打</view>
+  </block>
+
+  <!-- 完成 -->
+  <block wx:if="{{state === 'done'}}">
+    <view class="card spell-done">
+      <view class="done-icon">🏆</view>
+      <view class="done-title">默写完成</view>
+      <view class="done-row">拼对单词：{{total}} 个</view>
+      <view class="done-row ok">一次拼对：{{accuracy}}%</view>
+      <view class="done-row">打字速度：{{speed}} 字母/分</view>
+      <view class="done-note text-muted">错过的词已在刚才的重拼中巩固过一遍</view>
+      <button class="btn-primary done-btn" bindtap="again">再来一遍</button>
+      <button class="btn-plain done-btn" bindtap="goBack">返回</button>
+    </view>
+  </block>
+</view>

@@ -18,6 +18,11 @@
         <view class="mode-name">展示中文</view>
         <view class="mode-desc">显示中文释义，点击后出现英文单词，并朗读英文</view>
       </view>
+      <view class="mode-btn" bindtap="goSpell">
+        <view class="mode-icon">✍️</view>
+        <view class="mode-name">默写模式</view>
+        <view class="mode-desc">看中文拼写英文，错一个字母整词重打，错词自动回队重拼</view>
+      </view>
     </view>
   </block>
 
@@ -52,7 +57,64 @@
             <view class="study-hint" wx:else>点击显示英文并朗读</view>
           </block>
         </view>
+        <view class="study-acts">
+          <view class="act-btn" catchtap="speakWord" data-idx="{{index}}">🔊</view>
+          <view class="act-btn txt" catchtap="openLink" data-idx="{{index}}">拓展</view>
+        </view>
       </view>
     </view>
   </block>
+
+  <!-- 拓展弹层（R10）：衍生词 / 近义词 / 双语例句 -->
+  <view class="link-mask" wx:if="{{linkShow}}" bindtap="closeLink"></view>
+  <view class="link-sheet" wx:if="{{linkShow}}">
+    <view class="link-head">
+      <view class="link-word" catchtap="speakLinkWord">{{link.w}}</view>
+      <view class="link-phon" wx:if="{{link.p}}">{{link.p}}</view>
+      <view class="link-close" catchtap="closeLink">✕</view>
+    </view>
+
+    <view class="link-body" wx:if="{{link.ok}}">
+      <view class="link-sec" wx:if="{{link.rels.length > 0}}">
+        <view class="link-sec-title">🌱 衍生词（同根词）</view>
+        <view class="link-group" wx:for="{{link.rels}}" wx:for-item="grp" wx:key="pos">
+          <view class="link-group-pos">{{grp.pos}}</view>
+          <view class="link-rel" wx:for="{{grp.words}}" wx:for-item="d" wx:key="w">
+            <text class="link-rel-w">{{d.w}}</text>
+            <text class="link-rel-m" wx:if="{{d.m}}">{{d.m}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="link-sec" wx:if="{{link.synos.length > 0}}">
+        <view class="link-sec-title">🔁 近义词</view>
+        <view class="link-group" wx:for="{{link.synos}}" wx:for-item="grp" wx:key="pos">
+          <view class="link-group-pos">{{grp.pos}} {{grp.tran}}</view>
+          <view class="link-syns">
+            <text class="link-syn" wx:for="{{grp.ws}}" wx:for-item="s" wx:key="*this">{{s}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="link-sec" wx:if="{{link.sents.length > 0}}">
+        <view class="link-sec-title">📖 例句（点右侧 🔊 朗读）</view>
+        <view class="link-sent" wx:for="{{link.sents}}" wx:for-item="s" wx:key="en">
+          <view class="link-sent-main">
+            <view class="link-sent-en"><rich-text nodes="{{s.hl}}"></rich-text></view>
+            <view class="link-sent-cn">{{s.cn}}</view>
+          </view>
+          <view class="link-sent-play" catchtap="readSentence" data-en="{{s.en}}">🔊</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="link-body center" wx:elif="{{link.loading}}">
+      <view class="link-tip">拓展内容加载中…</view>
+    </view>
+
+    <view class="link-body center" wx:else>
+      <view class="link-tip">暂无拓展内容（网络不可用或该词暂无数据）</view>
+      <view class="link-retry" catchtap="retryLink">重试</view>
+    </view>
+  </view>
 </view>

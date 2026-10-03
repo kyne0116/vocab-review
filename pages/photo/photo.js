@@ -83,16 +83,19 @@ Page({
       // LLM 主路线返回 { words, notes }（R06-A① 自评注记）；VK 降级路线返回裸数组
       const lines = Array.isArray(result) ? result : ((result && result.words) || []);
       const notes = (result && !Array.isArray(result) && result.notes) || {};
-      const bank = store.getPhotoBank();
-      // 切分词典与「已收录」命中都基于有效内置库（静态库剔除已删词，R09-2：
-      // 用户从词库页删掉的内置词，拍照时不再标「已收录」、可重新收录）
+      const accId = store.currentAccount().id;
+      const queue = store.getAccountPhotoWords(accId);
+      // R14：切分词典保持两教材 + 当前队列（识别/粘连还原质量不受账号维度影响）；
+      // 「已收录」判定收窄到当前账号（另一教材的词允许收进当前账号）
       const builtIn = store.bankOf('junior').concat(store.bankOf('primary'));
-      const dict = parser.buildDict(builtIn, [], bank);
+      const curSet = {};
+      store.bankOf(accId).forEach(function (x) { curSet[x.w.toLowerCase()] = true; });
+      const dict = parser.buildDict(builtIn, [], queue);
       const glue = parser.gluedList(lines, dict);
       const tokens = parser.tokenize(lines, dict);
-      const candidates = parser.buildCandidates(lines, builtIn, bank)
+      const candidates = parser.buildCandidates(lines, builtIn, queue)
         .map(function (c) {
-          return { w: c.w, known: c.known, checked: !c.known, note: notes[c.w] || '' };
+          return { w: c.w, known: !!curSet[c.w.toLowerCase()], checked: !curSet[c.w.toLowerCase()], note: notes[c.w] || '' };
         });
       // [OCR] 诊断日志（回传定性用，定案后随其余 [OCR] 日志一并移除）：
       // 完整呈现 文本→token→过滤→候选 链路；拍照本已有滤除数 = token 数 - 候选数（known 词仍展示）
@@ -162,11 +165,11 @@ Page({
         if (that.data.candidates.some(function (x, i) { return i !== idx && x.w === w; })) {
           return wx.showToast({ title: '候选中已有「' + w + '」', icon: 'none' });
         }
-        if (store.getPhotoBank().some(function (x) { return x.w === w; })) {
-          return wx.showToast({ title: '生词本中已有「' + w + '」', icon: 'none' });
+        if (store.getAccountPhotoWords(store.currentAccount().id).some(function (x) { return x.w === w; })) {
+          return wx.showToast({ title: '已收录过「' + w + '」', icon: 'none' });
         }
-        // 与新收录同规则：命中内置有效库 → 标灰禁选（R09-2：已删的内置词不算命中）
-        const known = store.bankOf('junior').concat(store.bankOf('primary')).some(function (x) { return x.w === w; });
+        // 与新收录同规则：命中当前账号有效库 → 标灰禁选（R09-2 + R14：已删的内置词不算命中）
+        const known = store.inCurrentBank(w);
         const upd = {};
         upd['candidates[' + idx + ']'] = { w: w, known: known, checked: !known, note: c.note };
         if (c.checked && !known) upd.checkedCount = that.data.checkedCount; // 勾选态保持，计数不变
@@ -319,13 +322,12 @@ Page({
       wx.showToast({ title: '没有可收录的词，请先补齐释义', icon: 'none' });
       return;
     }
-    const added = store.addToPhotoBank(words);
-    this.setData({ stage: 'done', addedCount: added });
+    const added = store.addToAccountPhoto(words); // R14：收进当前账号
+    this.setData({ stage: 'done', addedCount: added, accName: store.currentAccount().name });
   },
 
-  // 去拍照生词本学习：切账号并回到新单词页
+  // 去学拍照生词：词已在当前账号队列，直接回新单词页（优先出批）
   goStudy: function () {
-    store.switchAccount('photo');
     wx.reLaunch({ url: '/pages/new/new' });
   },
 

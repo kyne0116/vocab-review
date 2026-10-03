@@ -9,9 +9,8 @@ const PAGE_SIZE = 100; // 大词库（3400+ 词）分屏渲染，触底续载
 Page({
   data: {
     accName: '',
-    isPhoto: false,    // 拍照生词本（动态词库）= 可删除；静态教材账号仅浏览
     keyword: '',
-    items: [],         // 完整过滤结果 [{ w, m, p, learned, done, statusText, sel }]
+    items: [],         // 完整过滤结果 [{ w, m, p, learned, done, statusText, photo, sel }]
     viewItems: [],     // 当前渲染的截段子集（items.slice(0, limit)）
     shownCount: 0,
     total: 0,
@@ -25,16 +24,14 @@ Page({
   onShow: function () {
     this._sel = this._sel || {};  // 勾选集（按词存，搜索过滤不丢已勾选项）
     this._limit = PAGE_SIZE;
-    const acc = store.currentAccount();
-    this.setData({ accName: acc.name, isPhoto: !!acc.dynamic });
+    this.setData({ accName: store.currentAccount().name });
     this.refresh();
   },
 
   refresh: function () {
     const sel = this._sel;
     const kw = (this.data.keyword || '').trim().toLowerCase();
-    const entries = store.getBankEntries();
-    if (this.data.isPhoto) entries.reverse(); // 拍照本按收录倒序（最新在前）；教材库保持课本顺序
+    const entries = store.getBankEntries(); // 静态教材顺序 + 拍照词附后（R14）
     const matched = entries.filter(function (x) {
       return !kw || x.w.toLowerCase().indexOf(kw) !== -1 || (x.m || '').indexOf(kw) !== -1;
     });
@@ -43,6 +40,7 @@ Page({
         w: x.w, m: x.m, p: x.p,
         learned: x.learned,
         done: x.done,
+        photo: !!x.photo,
         statusText: x.learned ? ('第' + x.batchNo + '批·' + (x.done ? '已完成' : '复习中')) : '待学习',
         sel: !!sel[x.w]
       };

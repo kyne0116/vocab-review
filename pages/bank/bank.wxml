@@ -3,7 +3,7 @@
   <!-- 标题统计 + 搜索 -->
   <view class="card head">
     <view class="head-row">
-      <view class="head-title">{{isPhoto ? '📷' : '📚'}} {{accName}} · {{total}} 词</view>
+      <view class="head-title">📚 {{accName}} · {{total}} 词</view>
       <view class="manage-btn" bindtap="toggleManage">{{manageMode ? '完成' : '管理'}}</view>
     </view>
     <view class="head-info text-muted">
@@ -23,10 +23,9 @@
       <view>没有匹配「{{keyword}}」的词</view>
     </block>
     <block wx:else>
-      <view class="empty-icon">{{isPhoto ? '📷' : '📚'}}</view>
-      <view wx:if="{{isPhoto}}">生词本还是空的</view>
-      <view wx:else>词库已清空</view>
-      <view class="text-muted" style="margin-top:12rpx;" wx:if="{{isPhoto}}">回到首页「拍照收词」拍一张课本或练习册即可收录</view>
+      <view class="empty-icon">📚</view>
+      <view>词库还是空的</view>
+      <view class="text-muted" style="margin-top:12rpx;">静态词库为空或已删尽；拍照收词可随时补充生词</view>
     </block>
   </view>
 
@@ -39,6 +38,7 @@
         <view class="wl-head">
           <view class="wl-word">{{item.w}}</view>
           <view class="wl-phonic" wx:if="{{item.p}}">[{{item.p}}]</view>
+          <view class="wl-photo" wx:if="{{item.photo}}">📷拍照</view>
           <view class="wl-status {{item.learned ? (item.done ? 'lg-done' : 'lg') : 'pend'}}">{{item.statusText}}</view>
         </view>
         <view class="wl-mean">{{item.m || '（无释义）'}}</view>

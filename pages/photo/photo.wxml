@@ -3,7 +3,7 @@
   <block wx:if="{{stage === 'idle'}}">
     <view class="card intro">
       <view class="intro-title">📷 拍照收词</view>
-      <view class="text-muted">拍课本 / 练习册，识别印刷体英文单词，自动查询释义后收录到「拍照生词本」，按批次学习并进入 10 次间隔复习。</view>
+      <view class="text-muted">拍课本 / 练习册，识别印刷体英文单词，自动查询释义后收录到「当前账号」，按批次学习并进入 10 次间隔复习。</view>
       <view class="text-muted intro-tip" wx:if="{{llmOk}}">已启用 AI 深度识别（图片将上传智谱云端识别，其余步骤在本机完成）；网络不可用或识别失败时自动切换本机识别。</view>
       <view class="text-muted intro-tip" wx:else>适合印刷体单词，手写体识别效果差；建议光线充足、镜头稳定。</view>
     </view>
@@ -104,8 +104,8 @@
       <view class="text-muted" wx:if="{{entries.length - okCount > 0}}">
         {{entries.length - okCount}} 个待补义词未收录
       </view>
-      <view class="text-muted">已加入「拍照生词本」账号，按每批 35 词进入学习与复习。</view>
-      <button class="btn-primary act-btn" bindtap="goStudy">去拍照生词本学习</button>
+      <view class="text-muted">已加入当前账号「{{accName}}」，点「新单词」将优先学习这些生词。</view>
+      <button class="btn-primary act-btn" bindtap="goStudy">去学习拍照生词</button>
       <button class="btn-plain act-btn" bindtap="again">继续拍照收词</button>
     </view>
   </block>

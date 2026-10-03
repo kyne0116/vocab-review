@@ -101,11 +101,84 @@ function lookupMany(words, onProgress) {
   });
 }
 
+// ===================== R10 单词拓展卡（2026-10-02 拍板，落 1.3.0） =====================
+// 复用同一 jsonapi 的三段拓展数据（字段实测记录见 docs/开发过程/01-待拍板议题 R10）：
+//   衍生词（同根词） rel_word.rels[].rel = { pos, words: [{ word, tran }] }
+//   近义词          syno.synos[].syno  = { pos, tran, ws: [{ w }] }
+//   双语例句        blng_sents_part['sentence-pair'][]
+//                     = { sentence, sentence-eng（目标词 <b> 高亮）, sentence-translation }
+// 接口无反义词字段（antonym 不存在），按拍板不设该段。近义词是按义项分组的（tran 即该组
+// 对应的义），个别简单词会混入无关义项的词（如 apple → 家伙义项的 fellow/guy），展示时
+// 带上分组义即可自解释，不做过滤。
+// K12 适配：例句按长度升序取最短 3 条（短句用词更简单）；近义词/衍生词每组限个。
+// 缓存 vocab_link_cache 为全局键（词典数据与账号无关）：命中即不再联网，离线可复看。
+
+const LINK_CACHE_KEY = 'vocab_link_cache';
+const LINK_CACHE_MAX = 600; // 缓存词条上限（家庭使用量级远达不到，超限整体重置防膨胀）
+const MAX_SENTS = 3;        // 例句条数（接口通常恰好返回 3 条）
+const MAX_SYN = 4;          // 近义词每组保留个数（实测原始每组可到 5）
+const MAX_REL = 4;          // 衍生词每组保留个数
+
+// 解析 jsonapi 的拓展段；三段全缺/全空返回 null（页面显示「暂无拓展内容」）
+function parseLinks(data) {
+  if (!data) return null;
+  const rels = [];
+  ((data.rel_word && data.rel_word.rels) || []).forEach(function (r) {
+    const rel = r && r.rel;
+    if (!rel || !Array.isArray(rel.words)) return;
+    const words = rel.words
+      .map(function (x) { return { w: (x.word || '').trim(), m: (x.tran || '').trim() }; })
+      .filter(function (x) { return x.w; })
+      .slice(0, MAX_REL);
+    if (words.length) rels.push({ pos: (rel.pos || '').trim(), words: words });
+  });
+  const synos = [];
+  ((data.syno && data.syno.synos) || []).forEach(function (s) {
+    const syn = s && s.syno;
+    if (!syn || !Array.isArray(syn.ws)) return;
+    const ws = syn.ws
+      .map(function (x) { return (x && x.w || '').trim(); })
+      .filter(Boolean)
+      .slice(0, MAX_SYN);
+    if (ws.length) synos.push({ pos: (syn.pos || '').trim(), tran: (syn.tran || '').trim(), ws: ws });
+  });
+  const sents = [];
+  const pairSrc = (data.blng_sents_part && data.blng_sents_part['sentence-pair']) || [];
+  pairSrc.forEach(function (p) {
+    if (!p) return;
+    const en = (p.sentence || '').trim();
+    const cn = (p['sentence-translation'] || '').trim();
+    if (!en || !cn) return;
+    sents.push({ en: en, hl: (p['sentence-eng'] || '').trim() || en, cn: cn });
+  });
+  sents.sort(function (a, b) { return a.en.length - b.en.length; });
+  const out = { rels: rels, synos: synos, sents: sents.slice(0, MAX_SENTS) };
+  if (!rels.length && !synos.length && !out.sents.length) return null;
+  return out;
+}
+
+// 查单个词的拓展数据：缓存命中不联网；联网查到才写缓存（查不到不写，下次重试仍会请求）
+function lookupLinks(word) {
+  let cache = {};
+  try { cache = wx.getStorageSync(LINK_CACHE_KEY) || {}; } catch (e) { /* 读失败按未缓存处理 */ }
+  if (cache[word]) return Promise.resolve({ ok: true, w: word, links: cache[word], cached: true });
+  return request(word).then(function (r) {
+    const links = r.ok ? parseLinks(r.data) : null;
+    if (!links) return { ok: false, w: word };
+    if (Object.keys(cache).length >= LINK_CACHE_MAX) cache = {};
+    cache[word] = links;
+    try { wx.setStorageSync(LINK_CACHE_KEY, cache); } catch (e) { /* 存储失败不影响本次展示 */ }
+    return { ok: true, w: word, links: links, cached: false };
+  });
+}
+
 module.exports = {
   CONCURRENCY: CONCURRENCY,
   MAX_POS: MAX_POS,
   MAX_CHARS: MAX_CHARS,
   parseEntry: parseEntry,
   lookup: lookup,
-  lookupMany: lookupMany
+  lookupMany: lookupMany,
+  parseLinks: parseLinks,
+  lookupLinks: lookupLinks
 };

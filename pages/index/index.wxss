@@ -11,6 +11,69 @@
   color: #999;
   font-size: 26rpx;
 }
+/* R11 连续学习火焰徽章 */
+.hero-streak {
+  display: inline-block;
+  margin-top: 16rpx;
+  background: #fff7e6;
+  color: #f59a23;
+  font-size: 24rpx;
+  font-weight: 600;
+  padding: 8rpx 24rpx;
+  border-radius: 28rpx;
+}
+
+/* R12 宠物卡（啾啾） */
+.pet-card {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+.pet-emoji {
+  font-size: 88rpx;
+  line-height: 1;
+  margin-right: 26rpx;
+  flex-shrink: 0;
+}
+.pet-emoji.bounce { animation: petJump .6s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes petJump {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(-24rpx) scale(1.08); }
+  100% { transform: translateY(0); }
+}
+.pet-main { flex: 1; min-width: 0; }
+.pet-title { font-size: 30rpx; font-weight: 600; }
+.pet-learned { color: #999; font-size: 24rpx; font-weight: 400; margin-left: 12rpx; }
+.pet-bar {
+  height: 16rpx;
+  background: #eee;
+  border-radius: 8rpx;
+  overflow: hidden;
+  margin: 14rpx 0 10rpx;
+}
+.pet-fill {
+  height: 100%;
+  background: #07c160;
+  border-radius: 8rpx;
+  transition: width .32s ease-out;
+}
+.pet-next { color: #999; font-size: 24rpx; }
+
+/* R13 家庭榜 */
+.family-card { margin-top: 24rpx; }
+.family-title { font-size: 30rpx; font-weight: 600; margin-bottom: 16rpx; }
+.family-row {
+  display: flex;
+  align-items: center;
+  padding: 18rpx 0;
+  border-bottom: 2rpx solid #f2f2f2;
+}
+.family-row:last-child { border-bottom: none; }
+.family-pet { font-size: 40rpx; margin-right: 18rpx; }
+.family-name { font-size: 28rpx; color: #333; flex: 1; }
+.family-nums { font-size: 24rpx; color: #999; }
+.family-row.me .family-name { color: #07c160; font-weight: 600; }
+.family-row.me .family-nums { color: #07c160; }
 
 .account {
   display: flex;
@@ -147,12 +210,4 @@
   text-align: center;
   color: #576b95;
   font-size: 26rpx;
-}
-
-/* 首页底部版本行（上传版本号镜像，app.js 同步维护） */
-.version-line {
-  text-align: center;
-  color: #bbb;
-  font-size: 22rpx;
-  padding: 16rpx 0 30rpx;
 }

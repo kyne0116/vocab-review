@@ -7,9 +7,10 @@ const OFFSETS = [1, 2, 3, 4, 6, 8, 11, 13, 16, 21]; // 10次复习所在天（�
 const FULL_REVIEW_ROUNDS = 3;                       // 前3次复习全部内容，后7次复习遗忘词
 
 const KEY_ACCOUNT = 'vocab_account';                // 当前账号id
-const KEY_PHOTO_BANK = 'vocab_photo_bank';          // 拍照生词本动态词库（photo 账号专用）
-const KEY_PHOTO_RECORDS = 'vocab_records_photo';    // photo 账号学习记录（删除词条需联动，见 removeFromPhotoBank）
-const KEY_PHOTO_CURSOR = 'vocab_cursor_photo';      // photo 账号学习游标（同上）
+// R14：拍照生词并入当前账号，原独立 photo 账号退役。以下为迁移源键（旧 photo 账号
+// 数据，migratePhotoAccount 读取；迁移后保留不删 + 标记防重跑，误迁可换目标重跑）
+const KEY_PHOTO_BANK = 'vocab_photo_bank';
+const KEY_PHOTO_RECORDS = 'vocab_records_photo';
 
 /* ---------- 账号 ---------- */
 function getAccounts() {
@@ -34,54 +35,102 @@ function switchAccount(id) {
   return false;
 }
 
-/* ---------- 拍照生词本（动态词库账号） ---------- */
-function getPhotoBank() {
-  return wx.getStorageSync(KEY_PHOTO_BANK) || [];
-}// 收录拍照词：与已有词去重后追加 { w, m, p, addedAt }，返回实际新增条数
-function addToPhotoBank(words) {
-  const bank = getPhotoBank();
+/* ---------- 拍照生词（R14：并入当前账号的优先学习队列，原独立 photo 账号退役） ---------- */
+// 每个真人账号自己的队列 vocab_photo_words_<accountId>（{ w, m, p, addedAt }）；
+// 未学拍照词在 nextBatch 中优先于静态教材词（保持「拍了就学」），学完自动回落教材顺序。
+function photoWordsKey(id) { return 'vocab_photo_words_' + id; }
+
+function getAccountPhotoWords(id) {
+  return wx.getStorageSync(photoWordsKey(id)) || [];
+}
+
+// 收录拍照词到当前账号：与该账号有效静态库、已有队列去重后追加，返回实际新增条数
+function addToAccountPhoto(words) {
+  const acc = currentAccount();
+  const queue = getAccountPhotoWords(acc.id);
   const seen = {};
-  bank.forEach(function (w) { seen[w.w] = true; });
+  bankOf(acc.id).forEach(function (x) { seen[x.w.toLowerCase()] = true; });
+  queue.forEach(function (x) { seen[x.w.toLowerCase()] = true; });
   const added = [];
   (words || []).forEach(function (w) {
-    if (!w || !w.w || seen[w.w]) return;
-    seen[w.w] = true;
+    if (!w || !w.w || seen[w.w.toLowerCase()]) return;
+    seen[w.w.toLowerCase()] = true;
     added.push({ w: w.w, m: w.m || '', p: w.p || '', addedAt: Date.now() });
   });
-  if (added.length) wx.setStorageSync(KEY_PHOTO_BANK, bank.concat(added));
+  if (added.length) wx.setStorageSync(photoWordsKey(acc.id), queue.concat(added));
   return added.length;
 }
 
-// 删除拍照生词本词条（R09：全量可删 + 联动清理）：
-// ① 词库移除；② 已学词（游标前）删除后游标左移，仍指向同一条"下一个待学词"；
-// ③ photo 账号各批次快照 words 与遗忘池同步移除该词（后续复习、错词本自动不含），
-// 复习历史 reviewHistory 保留。显式操作 photo 账号三键，不依赖当前账号。
-// words = 词条数组或字符串数组；返回 { removed, learned } 供页面提示。
-function removeFromPhotoBank(words) {
-  const set = {};
-  (words || []).forEach(function (x) {
-    const w = typeof x === 'string' ? x : (x && x.w);
-    if (w) set[w] = true;
+// 当前账号未学拍照词（队列中尚未进入任何批次快照的词）
+function unlearnedPhotoWords() {
+  const learned = {};
+  getRecords().forEach(function (r) {
+    r.words.forEach(function (x) { learned[x.w] = true; });
   });
-  if (!Object.keys(set).length) return { removed: 0, learned: 0 };
-  const bank = getPhotoBank();
-  const kept = bank.filter(function (x) { return !set[x.w]; });
-  const cursor = wx.getStorageSync(KEY_PHOTO_CURSOR) || 0;
-  let learned = 0;
-  for (let i = 0; i < Math.min(cursor, bank.length); i++) {
-    if (set[bank[i].w]) learned++;
+  return getAccountPhotoWords(currentAccount().id).filter(function (x) { return !learned[x.w]; });
+}
+
+// 当前账号「已收录」判定（拍照页标灰用）：有效静态库或本账号队列命中（忽略大小写）
+function inCurrentBank(word) {
+  const w = (word || '').toLowerCase();
+  if (!w) return false;
+  if (currentBank().some(function (x) { return x.w.toLowerCase() === w; })) return true;
+  return getAccountPhotoWords(currentAccount().id).some(function (x) { return x.w.toLowerCase() === w; });
+}
+
+// R14 一次性迁移：旧「拍照生词本」账号（词库 + 学习记录）并入目标账号。
+// 未学词 → 目标账号队列；学习记录（快照/遗忘池/复习历史）追加进目标账号，批次号
+// 接续重排、batchId 重生成避免冲突。源键保留不删 + vocab_photo_migrated 标记防重跑。
+// 迁移了数据返回 true；无数据或已迁移返回 false。
+function migratePhotoAccount(targetId) {
+  if (wx.getStorageSync('vocab_photo_migrated')) return false;
+  const bank = wx.getStorageSync(KEY_PHOTO_BANK);
+  const rs = wx.getStorageSync(KEY_PHOTO_RECORDS);
+  const hasBank = bank && bank.length;
+  const hasRecords = rs && rs.length;
+  if (!hasBank && !hasRecords) {
+    wx.setStorageSync('vocab_photo_migrated', true);
+    return false;
   }
-  if (kept.length !== bank.length) wx.setStorageSync(KEY_PHOTO_BANK, kept);
-  if (learned) {
-    wx.setStorageSync(KEY_PHOTO_CURSOR, cursor - learned);
-    const rs = wx.getStorageSync(KEY_PHOTO_RECORDS) || [];
+  // ① 未学词并入目标队列（跳过目标静态库 / 队列已有的词，以及随记录迁移的已学词）
+  const seen = {};
+  bankOf(targetId).forEach(function (x) { seen[x.w.toLowerCase()] = true; });
+  const queue = getAccountPhotoWords(targetId);
+  queue.forEach(function (x) { seen[x.w.toLowerCase()] = true; });
+  if (hasBank) {
+    const migratedLearned = {};
     rs.forEach(function (rec) {
-      rec.words = rec.words.filter(function (x) { return !set[x.w]; });
-      rec.wrongPool = rec.wrongPool.filter(function (x) { return !set[x.w]; });
+      rec.words.forEach(function (x) { migratedLearned[x.w] = true; });
     });
-    wx.setStorageSync(KEY_PHOTO_RECORDS, rs);
+    bank.forEach(function (x) {
+      if (!x || !x.w || seen[x.w.toLowerCase()] || migratedLearned[x.w]) return;
+      seen[x.w.toLowerCase()] = true;
+      queue.push({ w: x.w, m: x.m || '', p: x.p || '', addedAt: x.addedAt || Date.now() });
+    });
+    wx.setStorageSync(photoWordsKey(targetId), queue);
   }
-  return { removed: bank.length - kept.length, learned: learned };
+  // ② 学习记录追加进目标账号（start/end 置 -1 表示拍照来源，不占静态游标语义）
+  if (hasRecords) {
+    const target = wx.getStorageSync('vocab_records_' + targetId) || [];
+    let no = target.length;
+    rs.forEach(function (rec) {
+      no++;
+      target.push({
+        batchId: 'm' + no + '-' + rec.batchId,
+        batchNo: no,
+        date: rec.date,
+        start: -1,
+        end: -1,
+        words: rec.words,
+        reviewsDone: rec.reviewsDone,
+        wrongPool: rec.wrongPool,
+        reviewHistory: rec.reviewHistory || []
+      });
+    });
+    wx.setStorageSync('vocab_records_' + targetId, target);
+  }
+  wx.setStorageSync('vocab_photo_migrated', true);
+  return true;
 }
 
 // 词库页数据（R09）：当前账号词条附学习状态，状态从批次快照反查
@@ -102,7 +151,17 @@ function getBankEntries() {
       batchNo: st ? st.batchNo : 0,
       done: st ? st.done : false
     };
-  });
+  }).concat(getAccountPhotoWords(currentAccount().id).map(function (x) {
+    // R14：拍照词附在静态词之后，状态同样快照反查；photo=true 供词库页打「拍照」标
+    const st = status[x.w];
+    return {
+      w: x.w, m: x.m, p: x.p, addedAt: x.addedAt,
+      learned: !!st,
+      batchNo: st ? st.batchNo : 0,
+      done: st ? st.done : false,
+      photo: true
+    };
+  }));
 }
 
 /* ---------- 词库（含静态库软删除，R09-2：全账号可删） ---------- */
@@ -114,12 +173,11 @@ function getDeletedSet(id) {
   return set;
 }
 
-// 指定账号的有效词库（静态 = 绑定词库过滤已删词；photo = 拍照生词本）
+// 指定账号的有效词库（静态 = 绑定词库过滤已删词）
 function bankOf(id) {
   const list = ACCOUNTS.list;
   for (let i = 0; i < list.length; i++) {
     if (list[i].id !== id) continue;
-    if (list[i].dynamic) return getPhotoBank();
     const del = getDeletedSet(list[i].id);
     return list[i].bank.filter(function (x) { return !del[x.w]; });
   }
@@ -131,31 +189,41 @@ function currentBank() {
   return bankOf(currentAccount().id);
 }
 
-// 词库页删除词条（当前账号，R09-2）：待学词移出后续学习；已学词联动清理
-// （游标左移 + 各批次快照 words 与遗忘池同步移除，复习与错词本自动不含，
-// reviewHistory 历史统计保留）。返回 { removed, learned } 供页面提示。
+// 词库页删除词条（当前账号，R09-2 + R14）：待学词移出后续学习；已学词联动清理
+// （批次快照 words 与遗忘池移除，复习与错词本自动不含，reviewHistory 历史保留）。
+// 静态词 = 软删除 + 游标左移；拍照词 = 从队列真实移除（不动静态游标）。
+// 返回 { removed, learned } 供页面提示。
 function removeWords(words) {
   const acc = currentAccount();
-  if (acc.dynamic) return removeFromPhotoBank(words);
   const set = {};
   (words || []).forEach(function (x) {
     const w = typeof x === 'string' ? x : (x && x.w);
     if (w) set[w] = true;
   });
   if (!Object.keys(set).length) return { removed: 0, learned: 0 };
+  // 拍照词队列：真实移除（已学快照过滤在下方统一处理）
+  const queue = getAccountPhotoWords(acc.id);
+  const keptQ = queue.filter(function (x) { return !set[x.w]; });
+  if (keptQ.length !== queue.length) wx.setStorageSync(photoWordsKey(acc.id), keptQ);
+  // 静态词库：软删除
   const bank = currentBank();
   const kept = bank.filter(function (x) { return !set[x.w]; });
-  if (kept.length === bank.length) return { removed: 0, learned: 0 };
+  if (kept.length !== bank.length) {
+    const del = getDeletedSet(acc.id);
+    bank.forEach(function (x) { if (set[x.w]) del[x.w] = true; });
+    wx.setStorageSync('vocab_deleted_' + acc.id, Object.keys(del));
+  }
+  // 已学静态词删除 → 游标左移（删除数）；已学拍照词删除 → 不动游标，仅计入提示
   const cursor = getCursor();
   let learned = 0;
   for (let i = 0; i < Math.min(cursor, bank.length); i++) {
     if (set[bank[i].w]) learned++;
   }
-  const del = getDeletedSet(acc.id);
-  bank.forEach(function (x) { if (set[x.w]) del[x.w] = true; });
-  wx.setStorageSync('vocab_deleted_' + acc.id, Object.keys(del));
-  if (learned) {
-    setCursor(cursor - learned);
+  const snapSet = {};
+  getRecords().forEach(function (r) { r.words.forEach(function (x) { snapSet[x.w] = true; }); });
+  const queueLearned = queue.filter(function (x) { return set[x.w] && snapSet[x.w]; }).length;
+  if (learned || queueLearned) {
+    if (learned) setCursor(cursor - learned);
     const rs = getRecords();
     rs.forEach(function (rec) {
       rec.words = rec.words.filter(function (x) { return !set[x.w]; });
@@ -163,7 +231,10 @@ function removeWords(words) {
     });
     saveRecords(rs);
   }
-  return { removed: bank.length - kept.length, learned: learned };
+  return {
+    removed: (bank.length - kept.length) + (queue.length - keptQ.length),
+    learned: learned + queueLearned
+  };
 }
 
 /* ---------- 存取（按账号隔离） ---------- */
@@ -204,8 +275,19 @@ function diffDays(a, b) {
 }
 
 /* ---------- 新单词 ---------- */
-// 取下一批单词（按当前账号词库顺序），词库用完返回 null
+// 取下一批单词：R14 起当前账号未学拍照词优先成批（「拍了就学」），队列空后回落
+// 静态词库顺序（游标推进）。词库与队列都用完返回 null。
 function nextBatch() {
+  const fresh = unlearnedPhotoWords();
+  if (fresh.length) {
+    const list = fresh.slice(0, BATCH_SIZE);
+    return {
+      batchNo: getRecords().length + 1,
+      start: -1, end: -1, // 拍照批不占静态游标
+      words: list,
+      photo: true
+    };
+  }
   const words = currentBank();
   const cursor = getCursor();
   if (cursor >= words.length) return null;
@@ -233,7 +315,7 @@ function saveLearnedBatch(batch) {
     reviewHistory: []          // 每次复习的记录 {date, round, total, wrong}
   });
   saveRecords(rs);
-  setCursor(batch.end + 1);
+  if (!batch.photo) setCursor(batch.end + 1); // 拍照批不动静态游标（R14）
 }
 
 /* ---------- 复习调度 ---------- */
@@ -371,29 +453,37 @@ function getOverview() {
     });
     idx += rec.words.length;
   });
-  const pending = bank.slice(cursor);
-  for (let p = 0; p < pending.length; p += BATCH_SIZE) {
-    const count = Math.min(BATCH_SIZE, pending.length - p);
-    batches.push({
-      batchNo: batches.length + 1,
-      batchId: '',
-      start: idx,
-      end: idx + count - 1,
-      count: count,
-      state: p === 0 ? 'current' : 'todo', // 首个待学批：打开「新单词」就是它
-      reviewsDone: 0,
-      rounds: rounds,
-      wrongCount: 0,
-      date: '',
-      words: pending.slice(p, p + BATCH_SIZE),
-      reviewHistory: []
-    });
-    idx += count;
+  // 待学批与 nextBatch 一致：拍照词独立成批（优先），静态词另起批次，不混批（R14）
+  const photoPending = unlearnedPhotoWords();
+  const staticPending = bank.slice(cursor);
+  function pushPending(list) {
+    for (let p = 0; p < list.length; p += BATCH_SIZE) {
+      const count = Math.min(BATCH_SIZE, list.length - p);
+      batches.push({
+        batchNo: batches.length + 1,
+        batchId: '',
+        start: idx,
+        end: idx + count - 1,
+        count: count,
+        state: batches.length === records.length ? 'current' : 'todo', // 首个待学批：打开「新单词」就是它
+        reviewsDone: 0,
+        rounds: rounds,
+        wrongCount: 0,
+        date: '',
+        words: list.slice(p, p + BATCH_SIZE),
+        reviewHistory: []
+      });
+      idx += count;
+    }
   }
+  pushPending(photoPending);
+  pushPending(staticPending);
+  const pending = photoPending.concat(staticPending);
+  const totalWords = bank.length + getAccountPhotoWords(currentAccount().id).length;
   return {
     totalBatches: batches.length,
-    totalWords: bank.length,
-    learned: cursor,           // 已学到第 cursor 个词
+    totalWords: totalWords,
+    learned: totalWords - pending.length, // R14：含已学拍照词（静态游标只覆盖教材词）
     learnedBatches: records.length,
     currentBatchNo: records.length + 1,
     batches: batches
@@ -474,6 +564,82 @@ function getStreak() {
   return s;
 }
 
+// 学习日历（R11 打卡）：所有有学习（批次创建日）或复习记录的日期，'YYYY-MM-DD' 升序去重数组
+function getActiveDays() {
+  const days = {};
+  getRecords().forEach(function (r) {
+    days[r.date] = true;
+    (r.reviewHistory || []).forEach(function (h) { days[h.date] = true; });
+  });
+  return Object.keys(days).sort();
+}
+
+/* ---------- 宠物养成（R12，R11 二期）：纯本地正向激励 ---------- */
+// 成长驱动 = 当前账号累计已学词数（各批快照 words 之和）；只升不降展示，词删除导致
+// 的档位回落由页面静默对齐存量记录。门槛参数为拍脑袋的趣味值，可调。
+var PET_STAGES = [
+  { min: 0,   emoji: '🥚', name: '蛋·沉睡中' },
+  { min: 35,  emoji: '🐣', name: '破壳' },
+  { min: 105, emoji: '🐥', name: '幼崽' },
+  { min: 210, emoji: '🐤', name: '少年' },
+  { min: 350, emoji: '🐦', name: '成年' },
+  { min: 560, emoji: '🦅', name: '传说' }
+];
+
+// 当前账号宠物状态：{ stage, emoji, name, learned, nextEmoji, nextName, remaining, pct, maxed }
+function getPetInfo() {
+  const learned = getRecords().reduce(function (s, r) { return s + r.words.length; }, 0);
+  let stage = 0;
+  for (let i = 0; i < PET_STAGES.length; i++) {
+    if (learned >= PET_STAGES[i].min) stage = i;
+  }
+  const cur = PET_STAGES[stage];
+  const nxt = PET_STAGES[stage + 1] || null;
+  const pct = nxt
+    ? Math.min(100, Math.round((learned - cur.min) / (nxt.min - cur.min) * 100))
+    : 100;
+  return {
+    stage: stage,
+    emoji: cur.emoji,
+    name: cur.name,
+    learned: learned,
+    nextEmoji: nxt ? nxt.emoji : '',
+    nextName: nxt ? nxt.name : '',
+    remaining: nxt ? nxt.min - learned : 0,
+    pct: pct,
+    maxed: !nxt
+  };
+}
+
+/* ---------- 家庭榜（R13：不切账号读取各账号进度） ---------- */
+// 各账号 { id, name, dynamic, learned, streak, petEmoji }，按已学词数降序；
+// streak 与 getStreak 同算法、pet 档位与 getPetInfo 同门槛，仅数据源改为指定账号的存储键
+function getAccountsOverview() {
+  return ACCOUNTS.list.map(function (acc) {
+    const rs = wx.getStorageSync('vocab_records_' + acc.id) || [];
+    const learned = rs.reduce(function (s, r) { return s + r.words.length; }, 0);
+    const days = {};
+    rs.forEach(function (r) {
+      (r.reviewHistory || []).forEach(function (h) { days[h.date] = true; });
+    });
+    const d = new Date();
+    if (!days[fmtDay(d)]) d.setDate(d.getDate() - 1);
+    let streak = 0;
+    while (days[fmtDay(d)]) { streak++; d.setDate(d.getDate() - 1); }
+    let stage = 0;
+    for (let i = 0; i < PET_STAGES.length; i++) {
+      if (learned >= PET_STAGES[i].min) stage = i;
+    }
+    return {
+      id: acc.id,
+      name: acc.name,
+      learned: learned,
+      streak: streak,
+      petEmoji: PET_STAGES[stage].emoji
+    };
+  }).sort(function (a, b) { return b.learned - a.learned; });
+}
+
 /* ---------- 统计 ---------- */
 function getStats() {
   const rs = getRecords();
@@ -483,7 +649,7 @@ function getStats() {
     account: currentAccount(),
     batches: rs.length,
     learned: learned,
-    totalWords: currentBank().length,
+    totalWords: currentBank().length + getAccountPhotoWords(currentAccount().id).length,
     dueCount: session.due.length,
     todayItems: session.items.length,
     wrongCount: getWrongWords().length
@@ -502,9 +668,11 @@ module.exports = {
   currentBank: currentBank,
   bankOf: bankOf,
   removeWords: removeWords,
-  getPhotoBank: getPhotoBank,
-  addToPhotoBank: addToPhotoBank,
-  removeFromPhotoBank: removeFromPhotoBank,
+  getAccountPhotoWords: getAccountPhotoWords,
+  addToAccountPhoto: addToAccountPhoto,
+  unlearnedPhotoWords: unlearnedPhotoWords,
+  inCurrentBank: inCurrentBank,
+  migratePhotoAccount: migratePhotoAccount,
   getBankEntries: getBankEntries,
   nextBatch: nextBatch,
   saveLearnedBatch: saveLearnedBatch,
@@ -520,6 +688,10 @@ module.exports = {
   getLastReview: getLastReview,
   getNextDueInfo: getNextDueInfo,
   getStreak: getStreak,
+  getActiveDays: getActiveDays,
+  getPetInfo: getPetInfo,
+  getAccountsOverview: getAccountsOverview,
+  PET_STAGES: PET_STAGES,
   getWrongWords: getWrongWords,
   inWrongPool: inWrongPool,
   removeWrongWord: removeWrongWord

@@ -15,12 +15,8 @@ module.exports = {
       name: '小学人教版',
       desc: '小学人教版单词短语 + 高频考点',
       bank: primary
-    },
-    {
-      id: 'photo',
-      name: '拍照生词本',
-      desc: '拍照识别收录的生词（动态词库）',
-      dynamic: true // 无静态 bank，词条存本地存储键 vocab_photo_bank
     }
+    // R14（2026-10-02）：拍照生词不再作为独立账号，直接并入当前账号的优先学习队列
+    // （vocab_photo_words_<accountId>）；旧 photo 账号数据由 store.migratePhotoAccount 迁移。
   ]
 };

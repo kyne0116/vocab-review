@@ -102,3 +102,14 @@
 .bar-btn + .bar-btn { margin-left: 20rpx; }
 .bar-btn.plain { background: #fff; color: #07c160; border: 2rpx solid #07c160; }
 .bar-btn.danger { background: #e64340; color: #fff; }
+
+/* R14：拍照词来源标签 */
+.wl-photo {
+  background: #fff7e6;
+  color: #f59a23;
+  font-size: 20rpx;
+  border-radius: 8rpx;
+  padding: 4rpx 10rpx;
+  margin-right: 10rpx;
+  flex-shrink: 0;
+}

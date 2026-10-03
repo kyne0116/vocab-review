@@ -126,7 +126,7 @@ eq(s.due.filter(d => d.batchNo === 2).length, 1, '逾期仍会补做');
 
 // ---- 场景5：账号切换与词库/进度隔离 ----
 eq(store.currentAccount().id, 'junior', '默认账号为初中');
-eq(store.getAccounts().length, 3, '共三个账号（初中/小学/拍照生词本）');
+eq(store.getAccounts().length, 2, '两个账号（初中/小学；R14 拍照生词本账号退役）');
 
 const juniorLearned = store.getRecords().length; // 初中已有批次
 setDay(2026, 10, 11);
@@ -306,49 +306,50 @@ eq(store.getRecords()[0].wrongPool.length, 2, '忘记的词保留在遗忘池');
 const nd10b = store.getNextDueInfo();
 eq(nd10b.date, '2026-12-04', '自由复习后下一任务不变');
 
-// ---- 场景11：拍照生词本动态词库（R01=A） ----
-storage.vocab_photo_bank = []; // 拍照生词本清空
-store.switchAccount('photo');
-eq(store.currentAccount().id, 'photo', '切换到拍照生词本账号');
-eq(store.currentAccount().dynamic, true, '拍照生词本为动态词库账号');
-eq(store.getRecords().length, 0, '拍照生词本学习记录独立为空');
-eq(store.getStats().totalWords, 0, '词库为空时总量0');
-eq(store.nextBatch(), null, '空词库取不到新批次');
-eq(store.getOverview().totalBatches, 0, '空词库总览0批');
-
-eq(store.addToPhotoBank([
-  { w: 'apple', m: 'n. 苹果', p: 'ˈæpl' },
-  { w: 'banana', m: 'n. 香蕉' },
-  { w: 'apple', m: 'n. 苹果' } // 同批重复
-]), 2, '首次收录2词（同批去重）');
-eq(store.getPhotoBank().length, 2, '词库现有2词');
-eq(store.getPhotoBank()[0].p, 'ˈæpl', '词条保留音标');
-eq(store.getPhotoBank()[0].addedAt > 0, true, '词条记录收录时间');
+// ---- 场景11：拍照生词并入当前账号（R14：优先学习队列，原 photo 账号退役） ----
+storage.vocab_photo_words_junior = []; // 队列清空
+eq(store.currentAccount().id, 'junior', '当前为初中账号');
+const jrCursor11 = storage.vocab_cursor_junior;
+eq(store.addToAccountPhoto([
+  { w: 'zzapple', m: 'n. 苹果', p: 'ˈæpl' },
+  { w: 'zzbanana', m: 'n. 香蕉' },
+  { w: 'zzapple', m: 'n. 苹果' } // 同批重复
+]), 2, '收录2词（同批去重）');
+eq(store.getAccountPhotoWords('junior').length, 2, '队列现有2词');
+eq(store.getAccountPhotoWords('junior')[0].p, 'ˈæpl', '词条保留音标');
+eq(store.getAccountPhotoWords('junior')[0].addedAt > 0, true, '词条记录收录时间');
+eq(store.unlearnedPhotoWords().length, 2, '未学拍照词2个');
+eq(store.inCurrentBank('zzapple'), true, '已收录判定命中队列');
+eq(store.inCurrentBank(store.currentAccount().bank[0].w), true, '已收录判定命中静态库');
+eq(store.inCurrentBank('zznothing'), false, '未收录词判定不命中');
 
 const pb11 = store.nextBatch();
-eq(pb11.batchNo, 1, '拍照词第1批');
-eq(pb11.words.length, 2, '第1批2词');
-eq(pb11.words[0].w, 'apple', '按收录顺序取词');
+eq(pb11.photo, true, '拍照词优先成批（photo 标记）');
+eq(pb11.words.map(w => w.w).join(','), 'zzapple,zzbanana', '按收录顺序取词');
+store.saveLearnedBatch(pb11);
+eq(storage.vocab_cursor_junior, jrCursor11, '学拍照批不动静态游标');
 
-store.saveLearnedBatch(pb11); // 学习完成，cursor → 2
-eq(store.addToPhotoBank([{ w: 'apple', m: 'n. 苹果' }, { w: 'cherry', m: 'n. 樱桃' }]), 1, '已收录词不重复进库');
-eq(store.getPhotoBank().length, 3, '词库增至3词');
-const pb12 = store.nextBatch();
-eq(pb12.batchNo, 2, '新收录词续接第2批');
-eq(pb12.start, 2, '第2批从索引2开始（cursor 续接）');
-eq(pb12.words.map(w => w.w).join(','), 'cherry', '第2批只含新收录词');
-
-// 拍照词走完整复习流水线（学习日为场景10留下的 2026-12-03）
+// 拍照批走完整复习流水线（学习日为场景10留下的 2026-12-03）
 setDay(2026, 12, 4);
 const s11 = store.buildReviewSession();
-eq(s11.due.length, 1, '拍照词批次次日到期');
-eq(s11.items.length, 2, '第1次复习全部2词');
-eq(s11.items[0].phonetic, 'ˈæpl', '复习词条带音标（p 字段启用）');
+eq(s11.items.some(i => i.word === 'zzapple'), true, '拍照批次次日到期进入复习');
+eq(s11.items.filter(i => i.word === 'zzapple')[0].phonetic, 'ˈæpl', '复习词条带音标（p 字段启用）');
 
-// 切回静态账号：拍照词库持久、静态词库不受影响
+// 再收录：已学词不重复、新词优先续接
+eq(store.addToAccountPhoto([{ w: 'zzapple', m: 'n. 苹果' }, { w: 'zzcherry', m: 'n. 樱桃' }]), 1, '已收录词不重复进队');
+eq(store.unlearnedPhotoWords().map(w => w.w).join(','), 'zzcherry', '未学队列只剩新词');
+const pb12 = store.nextBatch();
+eq(pb12.photo, true, '新词继续优先成批');
+store.saveLearnedBatch(pb12);
+
+// 队列学空后回落静态词库（游标未受拍照批影响）
+const pb13 = store.nextBatch();
+eq(pb13.photo, undefined, '队列空后回落静态批次');
+eq(pb13.start, jrCursor11, '静态批次从原游标继续（无跳词/重复）');
+// 切账号隔离：primary 队列独立
+store.switchAccount('primary');
+eq(store.unlearnedPhotoWords().length, 0, 'primary 队列独立为空');
 store.switchAccount('junior');
-eq(store.getPhotoBank().length, 3, '切账号后拍照词库仍在');
-eq(store.currentBank().length, store.currentAccount().bank.length, '静态账号词库不受影响');
 
 // ---- 场景12：OCR 文本解析（utils/wordParser.js） ----
 const parser = require(path.join(__dirname, '..', 'utils', 'wordParser.js'));
@@ -530,84 +531,51 @@ eq(llmMod.parseCorrection('图中单词是 "manner" 吧'), { w: 'manner', note: 
 eq(llmMod.parseCorrection('没有词'), null, '纠错无结果返回 null');
 eq(llmMod.AUTO_FIX, false, 'R06-B 开关默认关闭（查义失败词不自动拉取建议）');
 
-// ---- 场景16：拍照生词本删除联动清理（R09：全量可删 + 联动清理） ----
-storage.vocab_photo_bank = [];
-storage.vocab_records_photo = [];
-storage.vocab_cursor_photo = 0;
-store.switchAccount('photo');
+// ---- 场景16：拍照词删除联动清理（R14：removeWords 同步队列） ----
+storage.vocab_photo_words_junior = [];
 const words16 = [];
 for (let i = 1; i <= 40; i++) {
   const n = i < 10 ? '0' + i : '' + i;
-  words16.push({ w: 'word' + n, m: 'n. 词' + n });
+  words16.push({ w: 'qword' + n, m: 'n. 词' + n });
 }
-eq(store.addToPhotoBank(words16), 40, 'R09：收录40词');
+eq(store.addToAccountPhoto(words16), 40, '收录40词');
 setDay(2027, 1, 1);
-store.saveLearnedBatch(store.nextBatch()); // 批1：word01~word35
+store.saveLearnedBatch(store.nextBatch()); // 拍照批：qword01~qword35
 setDay(2027, 1, 2);
-store.finishReview(store.buildReviewSession(), { word01: true, word02: true });
-eq(store.getRecords()[0].wrongPool.length, 2, '复习忘2词入遗忘池');
+store.finishReview(store.buildReviewSession(), { qword01: true, qword02: true });
+eq(store.getRecords().slice(-1)[0].wrongPool.length, 2, '复习忘2词入遗忘池');
 
-// 删除：已学在池 word01 + 已学不在池 word05 + 待学 word40
-const r16 = store.removeFromPhotoBank([{ w: 'word01' }, { w: 'word05' }, 'word40']);
-eq(r16.removed, 3, '删除3词（对象/字符串入参混用）');
+// 删除：已学在池 qword01 + 已学不在池 qword05 + 待学 qword40（对象/字符串入参混用）
+const r16 = store.removeWords([{ w: 'qword01' }, { w: 'qword05' }, 'qword40']);
+eq(r16.removed, 3, '删除3词');
 eq(r16.learned, 2, '其中已学2词');
-eq(store.getPhotoBank().length, 37, '词库剩37');
-eq(store.getPhotoBank().some(w => ['word01', 'word05', 'word40'].indexOf(w.w) !== -1), false, '三词已移出词库');
-const nb16 = store.nextBatch();
-eq(nb16.start, 33, '游标左移2后下一批起点=33');
-eq(nb16.words[0].w, 'word36', '下一批首词为原第36词（无跳词/重复）');
-eq(nb16.words.length, 4, '待学剩4词（word40已删）');
-const rec16 = store.getRecords()[0];
-eq(rec16.words.length, 33, '批1快照移除2词');
-eq(rec16.wrongPool.map(w => w.w).join(','), 'word02', '遗忘池同步移除已删词');
-eq(store.getWrongWords().some(w => w.word === 'word01'), false, '错词本不含已删词');
-setDay(2027, 1, 3);
-const s16b = store.buildReviewSession();
-eq(s16b.items.length, 33, '第2次复习按快照33词');
-eq(s16b.items.some(i => i.word === 'word01' || i.word === 'word05'), false, '复习内容不含已删词');
+eq(store.getAccountPhotoWords('junior').length, 37, '队列剩37');
+eq(store.getAccountPhotoWords('junior').some(w => ['qword01', 'qword05', 'qword40'].indexOf(w.w) !== -1), false, '三词已移出队列');
+const rec16 = store.getRecords().slice(-1)[0];
+eq(rec16.words.length, 33, '拍照批快照移除2词');
+eq(rec16.wrongPool.map(w => w.w).join(','), 'qword02', '遗忘池同步移除已删词');
+eq(store.getWrongWords().some(w => w.word === 'qword01'), false, '错词本不含已删词');
 
-// 总览快照化：批1=33词复习中，批2=4词当前批（旧算法按词库下标重切会错位）
+// 总览快照化：拍照批按快照33词，待学拍照词仍是当前批（优先于静态）
 const ov16 = store.getOverview();
-eq(ov16.totalBatches, 2, '总览2批');
-eq(ov16.batches[0].count, 33, '已学批按快照33词');
-eq(ov16.batches[0].words.some(w => w.w === 'word05'), false, '总览已学批不含已删词');
-eq(ov16.batches[1].state, 'current', '首个待学批为当前批');
-eq(ov16.batches[1].count, 4, '当前批4词');
-eq(ov16.learned, 33, '已学33词');
-eq(ov16.currentBatchNo, 2, '下一批号=2');
-// 词库页数据：词条附学习状态（快照反查，batchNo=0 待学习）
+const qBatch16 = ov16.batches.filter(b => b.words.some(w => w.w === 'qword02'))[0];
+eq(qBatch16.count, 33, '总览：拍照批按快照33词');
+eq(qBatch16.wrongCount, 1, '总览：拍照批遗忘池1词');
+const cur16 = ov16.batches.filter(b => b.state === 'current')[0];
+eq(cur16.words.map(w => w.w).join(','), 'qword36,qword37,qword38,qword39', '当前批=待学拍照4词（qword40已删，优先于静态）');
+// 词库页数据：拍照词条目打 photo 标，状态快照反查
 const e16 = {};
 store.getBankEntries().forEach(function (e) { e16[e.w] = e; });
-eq(e16['word02'].learned, true, '词库页：已学词 learned=true');
-eq(e16['word02'].batchNo, 1, '词库页：已学词标来源批次');
-eq(e16['word36'].learned, false, '词库页：待学词 learned=false');
-eq(e16['word36'].batchNo, 0, '词库页：待学词 batchNo=0');
-
-// 跨账号安全：当前账号非 photo 时仍只影响 photo 三键
-store.switchAccount('junior');
-const jr16 = store.getRecords().length;
-const r16b = store.removeFromPhotoBank(['word02']);
-eq(r16b.removed, 1, '非 photo 账号下删除仍生效');
-eq(r16b.learned, 1, 'word02为已学词');
-eq(store.getPhotoBank().length, 36, 'photo 词库剩36');
-eq(store.getRecords().length, jr16, '初中账号记录不受影响');
-eq(storage.vocab_records_photo[0].wrongPool.length, 0, 'photo 遗忘池同步清空');
-
-// 整批删空：批次壳保留但不再产生到期任务
-store.switchAccount('photo');
-store.removeFromPhotoBank(store.getPhotoBank().filter(w => w.w !== 'word36'));
-setDay(2027, 1, 5);
-const s16c = store.buildReviewSession();
-eq(s16c.due.length, 0, '内容删空的批次不再到期');
-eq(s16c.items.length, 0, '无复习内容');
-const ov16c = store.getOverview();
-eq(ov16c.batches[0].count, 0, '空批壳保留（批1快照0词）');
-eq(ov16c.batches[1].state, 'current', '仅剩待学词成当前批');
-eq(ov16c.batches[1].words.map(w => w.w).join(','), 'word36', '当前批仅剩 word36');
+eq(e16['qword02'].learned, true, '词库页：已学拍照词 learned=true');
+eq(e16['qword02'].photo, true, '词库页：拍照词带 photo 标');
+eq(e16['qword36'].learned, false, '词库页：待学拍照词 learned=false');
+eq(e16['qword36'].batchNo, 0, '词库页：待学拍照词 batchNo=0');
 
 // 边界：删不存在词 / 空入参为空操作
-eq(store.removeFromPhotoBank(['nope']).removed, 0, '删不存在词为空操作');
-eq(store.removeFromPhotoBank([]).removed, 0, '空入参安全');
+eq(store.removeWords(['nope']).removed, 0, '删不存在词为空操作');
+eq(store.removeWords([]).removed, 0, '空入参安全');
+// 清场：队列清空，避免影响后续场景的静态批次断言
+storage.vocab_photo_words_junior = [];
 
 // 静态账号：词库页数据 = 当前账号词库 + 快照反查状态（入口在首页「词库总量」，删除仅拍照本开放）
 store.switchAccount('junior');
@@ -618,6 +586,15 @@ eq(store.getBankEntries().length, store.currentAccount().bank.length, '词库页
 eq(eJ16[recJ16.words[0].w].learned, true, '静态账号已学词带状态');
 eq(eJ16[recJ16.words[0].w].batchNo, recJ16.batchNo, '静态账号来源批次正确');
 eq(eJ16[store.currentAccount().bank[store.getOverview().learned].w].learned, false, '游标处词为待学习');
+
+// 静态词与拍照词混合删除：静态走软删除 + 游标左移，拍照只清队列（放在静态断言之后避免污染）
+const jrBank16 = store.currentAccount().bank;
+eq(store.addToAccountPhoto([{ w: 'mmix', m: 'n. 混合' }]), 1, '补1个拍照词');
+const mixed16 = store.removeWords([{ w: 'mmix' }, jrBank16[1].w]);
+eq(mixed16.removed, 2, '混合删除2词（1拍照+1静态）');
+eq(storage.vocab_deleted_junior.indexOf(jrBank16[1].w) !== -1, true, '静态词进软删除集');
+eq(store.getAccountPhotoWords('junior').some(x => x.w === 'mmix'), false, '拍照词从队列移除');
+storage.vocab_photo_words_junior = []; // 清场
 
 // ---- 场景17：静态词库删除联动（R09-2：全账号可删，静态=软删除） ----
 storage.vocab_records_junior = []; storage.vocab_cursor_junior = 0;
@@ -653,6 +630,106 @@ eq(store.bankOf('junior').some(x => x.w === junior17[35].w), false, '已删词�
 const ov17 = store.getOverview();
 eq(ov17.batches[0].count, 33, '总览批1按快照33词');
 eq(ov17.totalWords, junior17.length - 3, '总览总词数=有效库');
+
+// ---- 场景18：单词拓展卡解析与缓存（utils/lookup.js R10；样本为 2026-10-02 接口实测摘录） ----
+const smp18 = require(path.join(__dirname, 'link-samples.json'));
+
+// happy：衍生词两组、近义词一组恰好 4 个、例句 3 条按长度升序
+const l18h = lk.parseLinks(smp18.happy);
+eq(l18h.rels.length, 2, 'happy 衍生词两组');
+eq(l18h.rels[0], { pos: 'adv.', words: [{ w: 'happily', m: '快乐地；幸福地；幸运地；恰当地' }] }, '衍生词规范化（tran 去首空格）');
+eq(l18h.rels[1].words[0].w, 'happiness', '名词衍生 happiness');
+eq(l18h.synos, [{ pos: 'adj.', tran: '幸福的；高兴的；巧妙的', ws: ['pleased', 'glad', 'blessed', 'smart'] }], '近义词按词性分组、ws 数组化');
+eq(l18h.sents.length, 3, '例句 3 条');
+eq(l18h.sents.map(s => s.en.length).join(','), '26,26,27', '例句按长度升序（等长保持原序）');
+eq(l18h.sents.every(s => s.hl.indexOf('<b>') >= 0), true, '例句高亮字段保留目标词加粗');
+
+// increase：近义词原始每组 5 个 → 截断为 4
+const l18i = lk.parseLinks(smp18.increase);
+eq(l18i.synos[0].ws.length, 4, '近义词每组最多 4 个');
+eq(l18i.synos[0].ws.indexOf('advance'), -1, '超出部分丢弃');
+eq(l18i.synos.length, 3, 'increase 近义词三组（n./vi./vt.）');
+
+// develop：例句原始顺序非升序，解析后重排
+const l18d = lk.parseLinks(smp18.develop);
+eq(l18d.sents.map(s => s.en.length).join(','), '35,36,46', '例句按长度升序重排');
+eq(l18d.rels[0].words.length, 3, 'adj. 衍生组 3 词（developed/developing/developmental）');
+
+// apple：无 rel_word 字段 → 衍生词为空数组，但例句仍 3 条 → 整体可用
+const l18a = lk.parseLinks(smp18.apple);
+eq(l18a.rels.length, 0, 'apple 无衍生词字段 → 空数组（页面按有无渲染）');
+eq(l18a.sents.length, 3, 'apple 例句仍 3 条');
+
+// 边界
+eq(lk.parseLinks(null), null, '空数据安全');
+eq(lk.parseLinks({ input: 'x' }), null, '三段全缺返回 null');
+
+// 缓存命中不联网（复用场景 13 的 wx.request stub 与 calls13 计数；微任务先于 finish 执行）
+storage.vocab_link_cache = { happy: l18h };
+const calls18before = calls13.length;
+lk.lookupLinks('happy').then(function (r) {
+  eq(r.ok && r.cached, true, '拓展缓存命中');
+  eq(r.links === l18h, true, '命中返回缓存对象');
+  eq(calls13.length, calls18before, '缓存命中不发请求');
+});
+
+// ---- 场景19：学习日历日期集合（R11 打卡日历数据源，utils/store.js getActiveDays） ----
+// junior 账号在场景17后：2027-02-01 学批次1、2027-02-02 完成第1次复习
+eq(store.getActiveDays().join(','), '2027-02-01,2027-02-02', '学习日 = 批次创建日 + 复习日（去重升序）');
+
+// ---- 场景20：宠物养成档位（R12，store.getPetInfo；场景17 后 junior 已学 33 词） ----
+const pet20 = store.getPetInfo();
+eq(pet20.stage, 0, '33 词 → 蛋阶段');
+eq(pet20.emoji, '🥚', '蛋阶段 emoji');
+eq(pet20.remaining, 2, '距破壳还差 2 词');
+eq(pet20.pct, 94, '蛋阶段进度 = 33/35 ≈ 94%');
+eq(store.PET_STAGES.length, 6, '六档形态');
+
+// ---- 场景21：家庭榜跨账号汇总（R13，store.getAccountsOverview 不切账号） ----
+const fam21 = store.getAccountsOverview();
+eq(fam21.length, 2, '两账号都在榜（R14 photo 账号退役）');
+const j21 = fam21.find(function (x) { return x.id === 'junior'; });
+eq(j21.learned, 33, 'junior 已学 33 词（读指定账号存储键）');
+eq(j21.petEmoji, '🥚', 'junior 宠物档位随榜带出');
+const p21 = fam21.find(function (x) { return x.id === 'primary'; });
+eq(p21.learned, 35, 'primary 已学 35 词（场景5 存量，未被场景17 重置）');
+const descOk = fam21.every(function (x, i) { return i === 0 || fam21[i - 1].learned >= x.learned; });
+eq(descOk, true, '按已学词数降序（primary 35 > junior 33）');
+eq(store.currentAccount().id, 'junior', '汇总过程未切换当前账号');
+
+// ---- 场景22：旧 photo 账号数据迁移（R14 migratePhotoAccount，app.js onLaunch 调用） ----
+storage.vocab_photo_words_junior = []; // 清队列便于断言
+storage.vocab_photo_migrated = '';     // 清迁移标记
+storage.vocab_photo_bank = [
+  { w: 'old1', m: 'n. 旧词1', addedAt: 1 },
+  { w: 'old2', m: 'n. 旧词2', addedAt: 2 },
+  { w: 'old3', m: 'n. 旧词3', addedAt: 3 },
+  { w: 'spell', m: 'v. 拼写', addedAt: 4 } // 命中 junior 静态库 → 跳过（name 已被场景17 删，故用 spell）
+];
+storage.vocab_records_photo = [{
+  batchId: 'bold1', batchNo: 1, date: '2026-09-10', start: 0, end: 1,
+  words: [{ w: 'old1', m: 'n. 旧词1' }, { w: 'old2', m: 'n. 旧词2' }],
+  reviewsDone: 1,
+  wrongPool: [{ w: 'old1', m: 'n. 旧词1' }],
+  reviewHistory: [{ date: '2026-09-11', round: 1, total: 2, wrong: 1 }]
+}];
+const before22 = store.getRecords().length;
+eq(store.migratePhotoAccount('junior'), true, '迁移执行');
+eq(store.getAccountPhotoWords('junior').map(x => x.w).join(','), 'old3',
+  '未学词入队（已学2词靠记录迁移不重复入队；命中静态库的 spell 跳过）');
+const rs22 = store.getRecords();
+eq(rs22.length, before22 + 1, 'photo 学习记录追加1批');
+const m22 = rs22[rs22.length - 1];
+eq(m22.batchNo, before22 + 1, '批次号接续重排');
+eq(m22.words.length, 2, '迁移批快照2词');
+eq(m22.wrongPool.length, 1, '遗忘池随迁');
+eq(m22.reviewHistory.length, 1, '复习历史随迁');
+eq(m22.date, '2026-09-10', '学习日期保留');
+eq(store.unlearnedPhotoWords().map(x => x.w).join(','), 'old3', '迁移的未学词进入优先队列');
+// 防重跑：再次调用为空操作；源键保留（误迁可清标记换目标重跑）
+eq(store.migratePhotoAccount('junior'), false, '已迁移标记防重跑');
+eq(storage.vocab_photo_bank.length, 4, '源词库键保留不删');
+
 
 
 

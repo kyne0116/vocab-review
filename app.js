@@ -1,13 +1,14 @@
-// 发布版本信息：微信不向上传版本号提供运行时 API，此处为「代码内镜像」——
-// 每次在开发者工具「上传」时与此处同步修改（版本号保持一致），首页底部展示供家人核对。
-// 发布时间精确到秒：一天多次上传也能区分；填「上传」那一刻的时间即可。
-const APP_VERSION = '1.1.0';
-const RELEASE_TIME = '2026-10-01 21:20:22';
+const store = require('./utils/store.js');
 
 App({
-  onLaunch: function () {},
-  globalData: {
-    appVersion: APP_VERSION,
-    releaseTime: RELEASE_TIME
-  }
+  onLaunch: function () {
+    // R14 一次性迁移：旧「拍照生词本」账号数据并入初中账号（有标记防重跑，源键保留）
+    store.migratePhotoAccount('junior');
+  },
+  globalData: {}
 });
+
+// ---- 实现时间戳（宪法见 AGENTS.md 强制规则 8）----
+// agent 每轮完成代码实现后，把下一行时间更新为本机当前时间（年月日+时分秒）。
+// 仅作代码内的最后实现标记；小程序界面不显示任何版本内容。
+// 最后实现：2026-10-02 09:33:09
