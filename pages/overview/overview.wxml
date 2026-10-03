@@ -6,6 +6,14 @@
       <view class="dot {{item.cls}}" wx:for="{{batchDots}}" wx:key="index"></view>
     </view>
     <view class="top-sub">已学 {{learned}} 词 · 还剩 {{remaining}} 词 · 当前第 {{currentBatchNo}} 批</view>
+    <!-- R21-C：全局正确率 + 最需巩固批次直达（加权综合口径，点击即去复习该批） -->
+    <view class="acc-line" wx:if="{{accSummary.acc !== null}}">
+      <view class="acc-sum">📈 复习正确率 {{accSummary.acc}}%</view>
+      <view class="acc-chips" wx:if="{{accSummary.weakBatches.length > 0}}">
+        <text class="wk-chip" wx:for="{{accSummary.weakBatches}}" wx:key="batchId"
+              catchtap="goWeak" data-id="{{item.batchId}}">第{{item.batchNo}}批 {{item.acc}}% ▸</text>
+      </view>
+    </view>
   </view>
 
   <view class="card batch" wx:for="{{batches}}" wx:key="batchNo" wx:for-item="b" wx:for-index="bi">
@@ -15,6 +23,7 @@
         <view class="bh-sub">
           <text class="state {{b.stateCls}}">{{b.stateText}}</text>
           <text wx:if="{{b.isLearned}}" class="review-text">复习 {{b.reviewsDone}}/{{b.rounds}}</text>
+          <text wx:if="{{b.acc !== null}}" class="acc {{b.accTrend}}">正确率 {{b.acc}}%{{b.trendArrow}}</text>
           <text wx:if="{{b.hasWrong}}" class="wrong-tag">{{b.wrongCount}} 需巩固</text>
         </view>
       </view>
@@ -31,9 +40,19 @@
 
     <block wx:if="{{b.open}}">
       <view class="hr"></view>
-      <view class="reviews-dots" wx:if="{{b.isLearned}}">
-        <text wx:for="{{b.dots}}" wx:key="index" class="rd {{item.done ? 'on' : ''}}"></text>
-        <text class="rd-label" wx:if="{{b.isLearned}}">3遍学习+10次间隔复习 · 已完成第{{b.reviewsDone}}/10次</text>
+      <!-- R21-C：复习旅程时间线（10 节点；实心=已完成，橙色呼吸=今天到期，红色=逾期；
+           三锚点：学习日 / 下次复习 / D21 终点；啾啾站在下一节点上） -->
+      <view class="tl" wx:if="{{b.isLearned}}">
+        <view class="tl-track">
+          <view class="tl-node {{item.done ? 'done' : ''}} {{item.today ? 'today' : ''}} {{item.overdue ? 'over' : ''}}"
+                wx:for="{{b.dots}}" wx:key="index"></view>
+        </view>
+        <view class="tl-pet" style="left: {{b.petLeft}}%;">{{petEmoji}}</view>
+        <view class="tl-labels">
+          <text class="tl-l">{{b.tlD0}}</text>
+          <text class="tl-c">{{b.tlCenter}}</text>
+          <text class="tl-r">{{b.tlEnd}}</text>
+        </view>
       </view>
       <view class="hr" wx:if="{{b.isLearned}}"></view>
       <view class="word-item" wx:for="{{b.words}}" wx:key="w">
@@ -43,7 +62,7 @@
       <view class="hr" wx:if="{{b.isLearned}}"></view>
       <block wx:if="{{b.isLearned}}">
         <view class="rh" wx:for="{{b.reviewHistory}}" wx:key="round">
-          第{{item.round}}次 · {{item.date}} · 共{{item.total}}词，错{{item.wrong}}词
+          第{{item.round}}次 · {{item.date}} · 共{{item.total}}词，错{{item.wrong}}词<text wx:if="{{item.accText}}">（{{item.accText}}）</text>
         </view>
       </block>
       <view class="rw" wx:if="{{b.hasWrong}}">本批遗忘池 {{b.wrongCount}} 词 · 会进入错词本并在后续轮次再考</view>

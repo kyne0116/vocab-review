@@ -10,6 +10,28 @@
 .progress-fill { height: 100%; background: #07c160; border-radius: 10rpx; }
 .top-sub { margin-top: 16rpx; color: #999; font-size: 26rpx; }
 
+/* R21-C：全局正确率行 + 最需巩固批次直达（点击即去复习该批） */
+.acc-line {
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 2rpx dashed #f0f0f0;
+}
+.acc-sum { font-size: 30rpx; font-weight: 600; color: #07c160; }
+.acc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 14rpx;
+}
+.wk-chip {
+  font-size: 24rpx;
+  color: #e64340;
+  background: #fff0ef;
+  padding: 8rpx 20rpx;
+  border-radius: 26rpx;
+  font-weight: 600;
+}
+
 /* 批次点阵：全书每批一个圆点，固定四色语义
    done(绿实）   = 已学且 10 次复习全部完成
    learning(橙描边) = 正在复习中
@@ -89,23 +111,59 @@
 
 .hr { height: 2rpx; background: #f0f0f0; margin: 20rpx 0; }
 
-.reviews-dots {
+/* R21-C：批次头正确率（趋势 up 绿 / down 红 / 平与 null 灰不标箭头） */
+.acc { font-size: 22rpx; font-weight: 600; color: #666; }
+.acc.up { color: #07c160; }
+.acc.down { color: #e64340; }
+
+/* R21-C：复习旅程时间线（取代原 10 裸点阵）：实心绿=已完成节点，橙色呼吸=今天到期，
+   红=逾期未做，灰=未来；三锚点=学习日 / 下次复习说明 / D21 终点；啾啾站在下一节点 */
+.tl { position: relative; margin-top: 26rpx; padding-top: 46rpx; }
+.tl-track {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10rpx;
+  padding: 0 4rpx;
 }
-.rd {
-  width: 22rpx;
-  height: 22rpx;
+.tl-node {
+  width: 20rpx;
+  height: 20rpx;
   border-radius: 50%;
   background: #e5e5e5;
+  flex-shrink: 0;
 }
-.rd.on { background: #07c160; }
-.rd-label {
-  margin-left: 12rpx;
-  color: #999;
-  font-size: 22rpx;
+.tl-node.done { background: #07c160; }
+.tl-node.today { background: #f59a23; animation: tlBreath 1.6s ease-in-out infinite; }
+.tl-node.today.over { background: #e64340; }
+@keyframes tlBreath {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.45); }
+}
+.tl-pet {
+  position: absolute;
+  top: -10rpx;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  transition: left .3s ease-out;
+}
+.tl-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14rpx;
+  gap: 12rpx;
+}
+.tl-l, .tl-r { font-size: 20rpx; color: #bbb; flex-shrink: 0; }
+.tl-c {
+  font-size: 20rpx;
+  color: #f59a23;
+  font-weight: 600;
+  text-align: center;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .word-item {

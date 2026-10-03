@@ -825,6 +825,141 @@ storage.vocab_records_junior = [{
 delete storage.vocab_photo_sessions_junior;
 eq(store.getPhotoSessions('junior')[0].words.map(w => w.w).join(','), 'lg2', '已学词不进 legacy 会话');
 
+// ---- 场景25：正确率聚合 / 排期推演 / 逐词忘记记录 / 顽固词（R21） ----
+storage.vocab_records_junior = []; storage.vocab_cursor_junior = 0;
+storage.vocab_photo_words_junior = [];
+storage.vocab_photo_sessions_junior = [];
+setDay(2027, 4, 1);
+store.saveLearnedBatch(store.nextBatch()); // 静态批1：2027-04-01 学习，35词
+
+// 25a 逐词忘记记录 + 批次正确率（第1轮忘5 → 86%）
+setDay(2027, 4, 2);
+let s25 = store.buildReviewSession();
+const f25a = {};
+s25.items.slice(0, 5).forEach(function (i) { f25a[i.word] = true; });
+store.finishReview(s25, f25a);
+let rec25 = store.getRecords()[0];
+eq(rec25.reviewHistory[0].forgot.length, 5, 'R21 逐词记录：第1轮忘记的5词落库');
+eq(rec25.reviewHistory[0].forgot.join(','),
+  s25.items.slice(0, 5).map(function (i) { return i.word; }).join(','), '忘记词名单正确');
+let acc25 = store.getBatchAccuracy(rec25);
+eq(acc25.rounds, 1, '已复习1轮');
+eq(acc25.acc, 86, '第1轮 30/35 → 综合正确率86');
+eq(acc25.lastAcc, 86, '最近一次=唯一一次=86');
+eq(acc25.trend, null, '首轮无趋势可比');
+
+// 第2轮全对 → 综合93、最近100、趋势 up（同全量轮口径 86→100）
+setDay(2027, 4, 3);
+s25 = store.buildReviewSession();
+store.finishReview(s25, {});
+acc25 = store.getBatchAccuracy(store.getRecords()[0]);
+eq(acc25.acc, 93, '两轮加权 65/70 → 93');
+eq(acc25.lastAcc, 100, '最近一次全对 → 100');
+eq(acc25.trend, 'up', '同口径（全量轮）86→100 趋势上升');
+
+// 第3轮忘2词入池，第4轮（巩固轮只考遗忘池2词）忘1 → lastAcc=50，
+// 此前无巩固轮 → trend=null（口径分段，不与全量轮比较、不误报退步）
+setDay(2027, 4, 4);
+s25 = store.buildReviewSession();
+const f25c = {};
+s25.items.slice(0, 2).forEach(function (i) { f25c[i.word] = true; });
+store.finishReview(s25, f25c);
+setDay(2027, 4, 5);
+s25 = store.buildReviewSession();
+eq(s25.items.length, 2, '第4轮只考遗忘池2词');
+const pool25 = store.getRecords()[0].wrongPool.map(function (w) { return w.w; });
+const f25d = {};
+f25d[pool25[0]] = true;
+store.finishReview(s25, f25d);
+acc25 = store.getBatchAccuracy(store.getRecords()[0]);
+eq(acc25.lastAcc, 50, '巩固轮 1/2 → 最近正确率50');
+eq(acc25.trend, null, '口径分段：首次巩固轮趋势null（不与全量轮86/100比较）');
+
+// 25b 排期推演：批1（date 4/1、reviewsDone=4、池1词）+ 新学批2（date 4/5）
+store.saveLearnedBatch(store.nextBatch()); // 静态批2：2027-04-05
+let fc25 = store.getReviewForecast(7);     // 今天=4/5
+eq(fc25.length, 2, '排期：两个未来节点');
+eq(fc25[0].date, '2027-04-06', '批2第1轮在4/6（全量轮）');
+eq(fc25[0].words, 35, '批2到期词数=全量35');
+eq(fc25[0].overdue, false, '未逾期');
+eq(fc25[1].date, '2027-04-07', '批1第5轮在4/7');
+eq(fc25[1].words, 1, '批1到期词数=遗忘池1词（巩固轮口径）');
+
+// 逾期：两批节点均已过 → 归入今天并标 overdue，同日聚合
+setDay(2027, 4, 10);
+const fc25b = store.getReviewForecast(7);
+eq(fc25b.length, 1, '逾期批次归入今天聚合');
+eq(fc25b[0].date, '2027-04-10', '聚合在今天');
+eq(fc25b[0].days, 0, 'days=0');
+eq(fc25b[0].overdue, true, '标记逾期');
+eq(fc25b[0].words, 36, '同日两批合计36词（池1+全量35，无重复词）');
+eq(fc25b[0].batches.length, 2, '批次明细保留两批');
+eq(store.getReviewForecast(0).length, 1, 'days=0 只含今天');
+
+// 25c 同词跨批去重（R15 灰词场景，手工构造同日到期且含同词的两批）
+storage.vocab_records_junior = [
+  { batchId: 't25x', batchNo: 1, date: '2027-04-01', start: -1, end: -1,
+    words: [{ w: 'dup', m: 'x' }, { w: 'onlya', m: 'x' }], reviewsDone: 0, wrongPool: [], reviewHistory: [] },
+  { batchId: 't25y', batchNo: 2, date: '2027-04-01', start: -1, end: -1,
+    words: [{ w: 'dup', m: 'x' }, { w: 'onlyb', m: 'x' }], reviewsDone: 0, wrongPool: [], reviewHistory: [] }
+];
+setDay(2027, 4, 2);
+const fc25c = store.getReviewForecast(7);
+eq(fc25c.length, 1, '同日到期聚合一条');
+eq(fc25c[0].words, 3, '同词去重：dup 只计一次（共3词）');
+eq(fc25c[0].batches.length, 2, '批次明细保留两批');
+
+// 25d 全局正确率汇总（手工构造：批1 两轮、批2 一轮，w2 跨批反复答错）
+storage.vocab_records_junior = [
+  { batchId: 's25a', batchNo: 1, date: '2027-04-01', start: -1, end: -1,
+    words: [{ w: 'w1', m: 'n. 一' }, { w: 'w2', m: 'n. 二' }, { w: 'ok1', m: '' }, { w: 'ok2', m: '' }, { w: 'ok3', m: '' }],
+    reviewsDone: 2, wrongPool: [],
+    reviewHistory: [
+      { date: '2027-04-02', round: 1, total: 5, wrong: 2, forgot: ['w1', 'w2'] },
+      { date: '2027-04-03', round: 2, total: 5, wrong: 1, forgot: ['w2'] }
+    ] },
+  { batchId: 's25b', batchNo: 2, date: '2027-04-02', start: -1, end: -1,
+    words: [{ w: 'w2', m: 'n. 二' }, { w: 'w3', m: 'n. 三' }, { w: 'w4', m: 'n. 四' }, { w: 'w5', m: 'n. 五' }, { w: 'w6', m: 'n. 六' }],
+    reviewsDone: 1, wrongPool: [{ w: 'w2', m: 'n. 二' }],
+    reviewHistory: [
+      { date: '2027-04-05', round: 1, total: 5, wrong: 4, forgot: ['w2', 'w3', 'w4', 'w5'] }
+    ] }
+];
+const sum25 = store.getAccuracySummary();
+eq(sum25.acc, 53, '全局加权 8/15 → 53');
+eq(sum25.batchesCounted, 2, '两批有复习记录参评');
+eq(sum25.bestBatch.batchNo, 1, '最佳批=第1批（70）');
+eq(sum25.weakBatches.length, 2, '仅两批参评，最需巩固取2');
+eq(sum25.weakBatches[0].batchNo, 2, '最需巩固榜首=第2批（20）');
+eq(sum25.byRound.length, 2, '轮次分布两条');
+eq(sum25.byRound[0].full, true, '第1轮属全量轮');
+eq(sum25.byRound[1].round, 2, '轮次升序');
+
+// 25e 顽固词：w2 历史答错3次居首（批1两次+批2一次），仍在批2遗忘池；
+// w1/w3/w4/w5 只错一次且已出池 → 不占位
+const stub25 = store.getStubbornWords();
+eq(stub25.length, 1, '只有 w2 反复答错（≥2次）');
+eq(stub25[0].word, 'w2', 'w2 居首');
+eq(stub25[0].count, 3, '历史答错3次');
+eq(stub25[0].inPool, true, '当前仍在遗忘池');
+eq(stub25[0].meaning, 'n. 二', '释义取最近一次答错所在批（批2）的快照');
+eq(stub25[0].batches.join(','), '1,2', '跨批统计来源批次');
+
+// 25f 空数据与旧记录容错
+storage.vocab_records_junior = [];
+eq(store.getAccuracySummary().acc, null, '无记录：全局正确率null');
+eq(store.getReviewForecast(7).length, 0, '无记录：排期为空');
+eq(store.getStubbornWords().length, 0, '无记录：无顽固词');
+eq(store.getBatchAccuracy(null).acc, null, 'null record 安全');
+storage.vocab_records_junior = [{
+  batchId: 'old25', batchNo: 1, date: '2027-04-01', start: -1, end: -1,
+  words: [{ w: 'oldw', m: '' }], reviewsDone: 1, wrongPool: [],
+  reviewHistory: [{ date: '2027-04-02', round: 1, total: 4, wrong: 1 }] // R21 前旧记录无 forgot
+}];
+eq(store.getAccuracySummary().acc, 75, '旧记录（无forgot）正确率正常 3/4');
+eq(store.getStubbornWords().length, 0, '旧记录无逐词数据不进顽固词（不炸）');
+
+
 
 
 

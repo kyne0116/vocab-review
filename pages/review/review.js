@@ -29,6 +29,10 @@ Page({
     lastReview: null,
     wrongCount: 0,
     nextDue: null,
+    // 复习中心（R21-D：无到期任务时的排期与正确率看板）
+    forecastCells: [],   // 未来 7 天稠密排期条（无任务的日子也占格）
+    accSummary: null,    // 全局正确率 + 最需巩固批次
+    recentAcc: [],       // 最近 8 次复习的当次正确率（sparkline 柱高）
     // 打卡日历（R11）
     calYear: 0,
     calMonth: 0,
@@ -58,7 +62,7 @@ Page({
     this.session = session;
 
     if (session.due.length === 0) {
-      // 没有到期任务 → 任务看板
+      // 没有到期任务 → 复习中心（R21-D：看板 + 未来排期条 + 正确率走势 + 巩固直达）
       this.setData({
         state: 'empty',
         streak: store.getStreak(),
@@ -66,6 +70,8 @@ Page({
         wrongCount: store.getStats().wrongCount,
         nextDue: store.getNextDueInfo()
       });
+      this.buildForecast();
+      this.buildAccBoard();
       this.buildCalendar();
       return;
     }
@@ -78,7 +84,7 @@ Page({
     this.startQuiz(session);
   },
 
-  // 教程总览页手动点选某一批
+  // 教材总览页手动点选某一批
   initManual: function (batchId) {
     this.mode = 'manual';
     const rec = store.getRecords().find(function (r) { return r.batchId === batchId; });
@@ -155,6 +161,23 @@ Page({
       batchNos: '',
       petEmoji: store.getPetInfo().emoji // R12：答对鼓励语带宠物
     });
+    this.updateExitGuard();
+  },
+
+  // R19 退出保护：复习进行中（非快测）开启系统返回询问——复习提交是全有或全无，
+  // 中途退出会丢弃全部已标记结果，返回前确认一次（快测无落库，退出无损失，不启用）。
+  // 拦截覆盖导航栏返回 / 安卓物理返回 / navigateBack；低版本基础库无此 API 时静默降级。
+  updateExitGuard: function () {
+    if (!wx.enableAlertBeforeUnload) return;
+    if (this.data.state !== 'quiz' || this.mode === 'study') {
+      if (wx.disableAlertBeforeUnload) wx.disableAlertBeforeUnload({ fail: function () {} });
+      return;
+    }
+    const remaining = this.data.items.length - this.data.index - 1;
+    const msg = this.data.view === 'list'
+      ? '复习还未提交，退出将不保存已标记的结果'
+      : '还有 ' + remaining + ' 词未复习，退出将不保存已标记的结果';
+    wx.enableAlertBeforeUnload({ message: msg, fail: function () {} });
   },
 
   // 该词所属批次本次是第几次复习（1~10）；自由复习无轮次概念
@@ -244,6 +267,7 @@ Page({
         feedback: '',
         progress: Math.round(next / this.data.items.length * 100)
       });
+      this.updateExitGuard(); // R19：剩余词数变化，更新返回询问文案
     } else {
       this.setData({ feedback: '' });
       this.finish();
@@ -277,6 +301,7 @@ Page({
       forgot: forgot,
       batchNos: nos.join('、')
     });
+    this.updateExitGuard(); // R19：到结果页即已落库，解除返回询问
   },
 
   /* ---------- R17 列表视图：整批词单通览，自控节奏 ---------- */
@@ -293,6 +318,7 @@ Page({
         ? !!this.data.listRevealed[this.data.current.word]
         : false
     });
+    this.updateExitGuard(); // R19：卡片/列表返回询问文案不同，切换后同步
   },
 
   // 按单词找词条（列表视图行内交互用；同会话内词唯一）
@@ -420,6 +446,52 @@ Page({
     if (m > 12) { y++; m = 1; }
     this.setData({ calYear: y, calMonth: m });
     this.buildCalendar();
+  },
+
+  /* ---------- R21-D：复习中心数据（排期条 / 正确率走势 / 巩固直达） ---------- */
+  // 未来 7 天稠密排期条：无任务的日子也占格（「今天的空闲也是排期的一部分」）；
+  // 词数口径与到期合并一致（同日多批按词去重），逾期未做的累积到当天
+  buildForecast: function () {
+    const fmap = {};
+    store.getReviewForecast(6).forEach(function (e) { fmap[e.date] = e; });
+    const wk = ['日', '一', '二', '三', '四', '五', '六'];
+    const cells = [];
+    const today = store.todayStr();
+    for (let i = 0; i < 7; i++) {
+      const d = store.addDays(today, i);
+      const p = d.split('-');
+      const wd = wk[new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).getDay()];
+      const e = fmap[d];
+      cells.push({
+        label: i === 0 ? '今天' : (i === 1 ? '明天' : '周' + wd),
+        words: e ? e.words : 0,
+        has: !!e,
+        overdue: !!(e && e.overdue)
+      });
+    }
+    this.setData({ forecastCells: cells });
+  },
+
+  // 正确率看板：全局加权综合 + 最近 8 次复习的当次正确率走势（跨批按日期升序）
+  buildAccBoard: function () {
+    const all = [];
+    store.getRecords().forEach(function (r) {
+      (r.reviewHistory || []).forEach(function (h) {
+        if (h.total > 0) all.push({ date: h.date, acc: Math.round((1 - h.wrong / h.total) * 100) });
+      });
+    });
+    all.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    this.setData({
+      accSummary: store.getAccuracySummary(),
+      recentAcc: all.slice(-8).map(function (x) { return x.acc; })
+    });
+  },
+
+  // 最需巩固批次直达（空态页内跳转用 redirectTo，复习完返回直接回首页层级）
+  goWeak: function (e) {
+    const id = e.currentTarget.dataset.id;
+    if (!id) return;
+    wx.redirectTo({ url: '/pages/review/review?batchId=' + id });
   },
 
   goFree: function () {

@@ -457,8 +457,13 @@ function finishReview(session, forgotMap) {
       rec.wrongPool = rec.wrongPool.filter(function (w) { return !!forgotMap[w.w]; });
     }
     const total = source.length;
-    const wrong = source.filter(function (w) { return !!forgotMap[w.w]; }).length;
-    rec.reviewHistory.push({ date: todayStr(), round: round + 1, total: total, wrong: wrong });
+    const wrongList = source.filter(function (w) { return !!forgotMap[w.w]; });
+    // R21：逐词记录忘记词（forgot 数组）——批次正确率口径之外提供词级历史，
+    // 供顽固词排行统计；旧记录无此字段由读取方容错
+    rec.reviewHistory.push({
+      date: todayStr(), round: round + 1, total: total, wrong: wrongList.length,
+      forgot: wrongList.map(function (w) { return w.w; })
+    });
     rec.reviewsDone = round + 1;
   });
   saveRecords(rs);
@@ -736,6 +741,138 @@ function getAccountsOverview() {
   }).sort(function (a, b) { return b.learned - a.learned; });
 }
 
+/* ---------- 正确率与排期（R21：批次正确率聚合 / 复习排期推演 / 顽固词） ---------- */
+// 批次正确率口径：加权综合 = 1 - Σwrong/Σtotal（跨已发生复习轮次）。前 3 轮考全量、
+// 后 7 轮只考遗忘池（total 口径不同），trend 仅在同口径轮次内比较，防止「第 4 轮起只
+// 考错词、通过率天然低」被误读为退步。返回 null = 尚无复习记录。
+// rec 可传完整 record，也可传 { reviewHistory } 摘录（总览页用法）。
+function getBatchAccuracy(rec) {
+  const hs = (rec && rec.reviewHistory) || [];
+  if (!hs.length) return { rounds: 0, acc: null, lastAcc: null, trend: null, wrongSum: 0, totalSum: 0 };
+  let wrongSum = 0, totalSum = 0;
+  hs.forEach(function (h) { wrongSum += h.wrong || 0; totalSum += h.total || 0; });
+  const last = hs[hs.length - 1];
+  const lastAcc = last.total > 0 ? Math.round((1 - last.wrong / last.total) * 100) : null;
+  const acc = totalSum > 0 ? Math.round((1 - wrongSum / totalSum) * 100) : null;
+  const isFullRound = function (r) { return r <= FULL_REVIEW_ROUNDS; };
+  let pW = 0, pT = 0;
+  for (let i = 0; i < hs.length - 1; i++) {
+    if (isFullRound(hs[i].round) !== isFullRound(last.round)) continue;
+    pW += hs[i].wrong || 0; pT += hs[i].total || 0;
+  }
+  let trend = null;
+  if (pT > 0 && lastAcc !== null) {
+    const prev = Math.round((1 - pW / pT) * 100);
+    trend = lastAcc - prev > 5 ? 'up' : (prev - lastAcc > 5 ? 'down' : 'flat');
+  }
+  return { rounds: hs.length, acc: acc, lastAcc: lastAcc, trend: trend, wrongSum: wrongSum, totalSum: totalSum };
+}
+
+// 全局正确率汇总：加权综合 + 最佳 / 最需巩固批次（仅有复习记录的批参评）+ 按轮次分布
+// （byRound 的 full 标志区分全量轮/巩固轮，页面分段展示防误读）
+function getAccuracySummary() {
+  const rs = getRecords();
+  let wrongSum = 0, totalSum = 0;
+  const byRound = {};
+  const perBatch = [];
+  rs.forEach(function (rec) {
+    const a = getBatchAccuracy(rec);
+    if (a.rounds === 0) return;
+    wrongSum += a.wrongSum;
+    totalSum += a.totalSum;
+    perBatch.push({ batchNo: rec.batchNo, batchId: rec.batchId, acc: a.acc, wrongCount: rec.wrongPool.length });
+    (rec.reviewHistory || []).forEach(function (h) {
+      if (!byRound[h.round]) byRound[h.round] = { round: h.round, wrong: 0, total: 0 };
+      byRound[h.round].wrong += h.wrong || 0;
+      byRound[h.round].total += h.total || 0;
+    });
+  });
+  const rounds = Object.keys(byRound).map(function (k) {
+    const b = byRound[k];
+    return {
+      round: b.round, full: b.round <= FULL_REVIEW_ROUNDS, total: b.total, wrong: b.wrong,
+      acc: b.total > 0 ? Math.round((1 - b.wrong / b.total) * 100) : null
+    };
+  }).sort(function (a, b) { return a.round - b.round; });
+  let bestBatch = null;
+  let weakBatches = [];
+  if (perBatch.length) {
+    const sorted = perBatch.slice().sort(function (a, b) { return a.acc - b.acc; });
+    weakBatches = sorted.slice(0, 3);
+    bestBatch = sorted[sorted.length - 1];
+  }
+  return {
+    acc: totalSum > 0 ? Math.round((1 - wrongSum / totalSum) * 100) : null,
+    batchesCounted: perBatch.length,
+    bestBatch: bestBatch,
+    weakBatches: weakBatches,
+    byRound: rounds
+  };
+}
+
+// 复习排期推演（静态）：每个未完成批次只推「下一个」复习节点（date + OFFSETS[reviewsDone]），
+// 与 getDueBatches 同口径；逾期（节点 < 今天）归入今天并标 overdue；同日多批按词去重计词数
+// （与今日到期合并口径一致，R15 灰词跨批不虚计）。days = 今天之后仍推演的天数上限。
+// FSRS 接入后重写本函数即可——页面只消费 { date, words } 聚合，不感知调度模型。
+function getReviewForecast(days) {
+  const today = todayStr();
+  const range = days || 7;
+  const map = {};
+  getRecords().forEach(function (r) {
+    if (r.reviewsDone >= OFFSETS.length) return;
+    if (r.words.length === 0 && r.wrongPool.length === 0) return; // 整批删空不再排期（同 getDueBatches）
+    const src = r.reviewsDone < FULL_REVIEW_ROUNDS ? r.words : r.wrongPool;
+    if (!src.length) return; // 空轮批到期即自动完成，不进排期预告
+    const node = addDays(r.date, OFFSETS[r.reviewsDone]);
+    const d = diffDays(today, node);
+    if (d > range) return;
+    const key = d < 0 ? today : node; // 逾期批次归入今天聚合（与 getDueBatches 补做语义一致）
+    if (!map[key]) map[key] = { date: key, days: Math.max(0, d), overdue: d < 0, words: {}, batches: [] };
+    src.forEach(function (w) { if (w && w.w) map[key].words[w.w] = true; });
+    map[key].batches.push({ batchNo: r.batchNo, batchId: r.batchId, words: src.length });
+  });
+  return Object.keys(map).sort().map(function (k) {
+    const e = map[k];
+    return { date: e.date, days: e.days, overdue: e.overdue, words: Object.keys(e.words).length, batches: e.batches };
+  });
+}
+
+// 顽固词排行：历史复习中反复答错（forgot 计数 ≥ 2）的词。数据源 = reviewHistory[].forgot
+// （R21 起 finishReview 逐词记录，旧记录无此字段自然跳过）；inPool = 当前是否仍在遗忘池
+// （答对一次即出池，但历史答错次数保留）。释义音标取最近一次答错所在批的快照反查。
+function getStubbornWords(limit) {
+  const n = limit || 10;
+  const map = {};
+  const rs = getRecords();
+  rs.forEach(function (rec) {
+    (rec.reviewHistory || []).forEach(function (h) {
+      (h.forgot || []).forEach(function (w) {
+        if (!map[w]) map[w] = { count: 0, lastDate: '', m: '', p: '', batches: {} };
+        const it = map[w];
+        it.count++;
+        if (!it.lastDate || h.date > it.lastDate) {
+          it.lastDate = h.date;
+          const hit = rec.words.filter(function (x) { return x.w === w; })[0];
+          if (hit) { it.m = hit.m || ''; it.p = hit.p || ''; }
+        }
+        it.batches[rec.batchNo] = true;
+      });
+    });
+  });
+  const pool = {};
+  rs.forEach(function (r) { r.wrongPool.forEach(function (w) { pool[w.w] = true; }); });
+  return Object.keys(map).map(function (w) {
+    const it = map[w];
+    return {
+      word: w, meaning: it.m, phonetic: it.p, count: it.count, lastDate: it.lastDate,
+      inPool: !!pool[w],
+      batches: Object.keys(it.batches).map(Number).sort(function (a, b) { return a - b; })
+    };
+  }).filter(function (x) { return x.count >= 2; }) // 顽固 = 反复错；错过一次已出池的词不占位
+    .sort(function (a, b) { return b.count - a.count || (a.lastDate < b.lastDate ? 1 : -1); })
+    .slice(0, n);
+}
+
 /* ---------- 统计 ---------- */
 function getStats() {
   const rs = getRecords();
@@ -786,6 +923,10 @@ module.exports = {
   getNextDueInfo: getNextDueInfo,
   getStreak: getStreak,
   getActiveDays: getActiveDays,
+  getBatchAccuracy: getBatchAccuracy,
+  getAccuracySummary: getAccuracySummary,
+  getReviewForecast: getReviewForecast,
+  getStubbornWords: getStubbornWords,
   getPetInfo: getPetInfo,
   getAccountsOverview: getAccountsOverview,
   PET_STAGES: PET_STAGES,

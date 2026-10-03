@@ -34,6 +34,35 @@
       <view class="board-note text-muted">复习节点：学后第 1、2、3、4、6、8、11、13、16、21 天</view>
     </view>
 
+    <!-- R21-D：未来 7 天排期条（复习中心）——无任务的日子也占格，逾期累积到当天 -->
+    <view class="card fc-card">
+      <view class="fc-title">📅 未来 7 天复习排期</view>
+      <view class="fc-row">
+        <view class="fc-cell {{c.has ? 'has' : ''}} {{c.overdue ? 'over' : ''}}"
+              wx:for="{{forecastCells}}" wx:key="index" wx:for-item="c">
+          <view class="fc-label">{{c.label}}</view>
+          <view class="fc-num">{{c.has ? c.words : '—'}}</view>
+        </view>
+      </view>
+      <view class="fc-note text-muted">数字 = 当天到期词数 · 做完一轮复习，下一轮会排进后面的日子</view>
+    </view>
+
+    <!-- R21-D：正确率看板（复习中心）——全局综合 + 最近 8 次走势 + 最需巩固直达 -->
+    <view class="card ab-card" wx:if="{{accSummary.acc !== null}}">
+      <view class="ab-head">
+        <view class="ab-title">📈 复习正确率 {{accSummary.acc}}%</view>
+        <view class="ab-spark" wx:if="{{recentAcc.length > 0}}">
+          <view class="sp-bar {{item < 60 ? 'low' : ''}}" wx:for="{{recentAcc}}" wx:key="index"
+                style="height: {{item}}%;"></view>
+        </view>
+      </view>
+      <view class="ab-weak" wx:if="{{accSummary.weakBatches.length > 0}}">
+        <text class="ab-wk-label">最需巩固：</text>
+        <text class="wk-chip" wx:for="{{accSummary.weakBatches}}" wx:key="batchId"
+              catchtap="goWeak" data-id="{{item.batchId}}">第{{item.batchNo}}批 {{item.acc}}% ▸</text>
+      </view>
+    </view>
+
     <!-- 打卡日历（R11）：学习/复习过的日期点亮 -->
     <view class="card cal-card">
       <view class="cal-head">

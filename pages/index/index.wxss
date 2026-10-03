@@ -1,29 +1,123 @@
-.hero {
+/* ============ R18 首页改版 ============ */
+/* 结构：头部卡（口号+账号+streak+切换提示）→ 到期条（仅有任务）→ 新单词/复习 →
+   宠物卡 → 拍照收词/错词本 → 教材进度/统计 → 家庭榜（唯一切换账号入口）。
+   视范：字号五档 40 / 34 / 30 / 26 / 22；卡片强调统一为左色条；动画只做入场一次。 */
+
+/* ---- 头部卡（原 hero + 账号卡合并，零顶部留白） ---- */
+.head { margin-bottom: 24rpx; }
+.head-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.head-slogan {
+  color: #07c160;
+  font-size: 22rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+}
+.head-help {
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 44rpx;
   text-align: center;
-  padding: 60rpx 0 40rpx;
-}
-.hero-title {
-  font-size: 48rpx;
-  font-weight: bold;
-}
-.hero-sub {
-  margin-top: 12rpx;
-  color: #999;
+  border-radius: 50%;
+  background: #eefaf2;
+  color: #07c160;
   font-size: 26rpx;
+  font-weight: 600;
+  flex-shrink: 0;
 }
-/* R11 连续学习火焰徽章 */
-.hero-streak {
-  display: inline-block;
+.head-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-top: 16rpx;
+}
+.head-name { font-size: 40rpx; font-weight: bold; }
+.head-streak {
+  flex-shrink: 0;
+  margin-left: 16rpx;
   background: #fff7e6;
   color: #f59a23;
-  font-size: 24rpx;
+  font-size: 22rpx;
   font-weight: 600;
-  padding: 8rpx 24rpx;
-  border-radius: 28rpx;
+  padding: 6rpx 18rpx;
+  border-radius: 24rpx;
 }
+.head-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10rpx;
+}
+.head-desc {
+  flex: 1;
+  min-width: 0;
+  margin-right: 16rpx;
+  color: #999;
+  font-size: 26rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.head-switch { color: #576b95; font-size: 26rpx; flex-shrink: 0; }
 
-/* R12 宠物卡（啾啾） */
+/* ---- 到期复习引导条（R16-B，R18 起紧随头部卡；入场动画仅一次，不做常驻脉冲） ---- */
+.due-banner {
+  display: flex;
+  align-items: center;
+  background: #fff7e6;
+  border: 2rpx solid #f59a23;
+  border-radius: 20rpx;
+  padding: 24rpx 28rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(245, 154, 35, 0.18);
+  animation: dueIn .36s ease-out;
+}
+@keyframes dueIn {
+  from { opacity: 0; transform: translateY(-14rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.due-banner-icon { font-size: 48rpx; margin-right: 22rpx; flex-shrink: 0; }
+.due-banner-main { flex: 1; min-width: 0; }
+.due-banner-title { color: #b96a00; font-size: 30rpx; font-weight: 600; }
+.due-banner-sub { color: #d98c1f; font-size: 26rpx; margin-top: 6rpx; }
+.due-banner-fc { color: #d98c1f; font-size: 22rpx; margin-top: 4rpx; opacity: .85; }
+.due-banner-go { color: #f59a23; font-size: 34rpx; font-weight: bold; flex-shrink: 0; }
+
+/* ---- 新单词 / 复习 主按钮 ---- */
+.menu {
+  display: flex;
+  gap: 24rpx;
+  margin-bottom: 24rpx;
+}
+.menu-btn {
+  flex: 1;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 40rpx 20rpx;
+  text-align: center;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+.menu-btn.new { border-left: 8rpx solid #07c160; }
+.menu-btn.review { border-left: 8rpx solid #f59a23; }
+.menu-icon { font-size: 60rpx; }
+.menu-name { font-size: 34rpx; font-weight: bold; margin-top: 12rpx; }
+.menu-desc { font-size: 26rpx; color: #999; margin-top: 10rpx; }
+/* R21-B：复习按钮排期预告行 + 新单词按钮全书进度微条（与按钮主色一致） */
+.menu-sub { font-size: 22rpx; color: #bbb; margin-top: 8rpx; }
+.menu-bar {
+  height: 10rpx;
+  background: #f0f0f0;
+  border-radius: 6rpx;
+  margin: 18rpx 24rpx 0;
+  overflow: hidden;
+}
+.menu-bar-fill { height: 100%; border-radius: 6rpx; }
+.menu-btn.new .menu-bar-fill { background: #07c160; }
+
+/* ---- R12 宠物卡（啾啾） ---- */
 .pet-card {
   display: flex;
   align-items: center;
@@ -43,7 +137,7 @@
 }
 .pet-main { flex: 1; min-width: 0; }
 .pet-title { font-size: 30rpx; font-weight: 600; }
-.pet-learned { color: #999; font-size: 24rpx; font-weight: 400; margin-left: 12rpx; }
+.pet-learned { color: #999; font-size: 22rpx; font-weight: 400; margin-left: 12rpx; }
 .pet-bar {
   height: 16rpx;
   background: #eee;
@@ -57,92 +151,14 @@
   border-radius: 8rpx;
   transition: width .32s ease-out;
 }
-.pet-next { color: #999; font-size: 24rpx; }
+.pet-next { color: #999; font-size: 22rpx; }
 
-/* R13 家庭榜 */
-.family-card { margin-top: 24rpx; }
-.family-title { font-size: 30rpx; font-weight: 600; margin-bottom: 16rpx; }
-.family-row {
-  display: flex;
-  align-items: center;
-  padding: 18rpx 0;
-  border-bottom: 2rpx solid #f2f2f2;
-}
-.family-row:last-child { border-bottom: none; }
-.family-pet { font-size: 40rpx; margin-right: 18rpx; }
-.family-name { font-size: 28rpx; color: #333; flex: 1; }
-.family-nums { font-size: 24rpx; color: #999; }
-.family-row.me .family-name { color: #07c160; font-weight: 600; }
-.family-row.me .family-nums { color: #07c160; }
-
-.account {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30rpx;
-}
-.account-label {
-  font-size: 22rpx;
-  color: #999;
-}
-.account-name {
-  font-size: 38rpx;
-  font-weight: bold;
-  margin-top: 6rpx;
-}
-.account-desc { margin-top: 6rpx; }
-.account-switch {
-  color: #576b95;
-  font-size: 26rpx;
-  flex-shrink: 0;
-}
-
-/* R16-B 复习优先引导条：有到期任务时置顶展示，点击直达复习页 */
-.due-banner {
-  display: flex;
-  align-items: center;
-  background: #fff7e6;
-  border: 2rpx solid #f59a23;
-  border-radius: 20rpx;
-  padding: 24rpx 28rpx;
-  margin-bottom: 24rpx;
-  box-shadow: 0 4rpx 16rpx rgba(245, 154, 35, 0.18);
-  animation: duePulse 2.4s ease-in-out infinite;
-}
-@keyframes duePulse {
-  0%, 100% { box-shadow: 0 4rpx 16rpx rgba(245, 154, 35, 0.18); }
-  50% { box-shadow: 0 6rpx 26rpx rgba(245, 154, 35, 0.34); }
-}
-.due-banner-icon { font-size: 48rpx; margin-right: 22rpx; flex-shrink: 0; }
-.due-banner-main { flex: 1; min-width: 0; }
-.due-banner-title { color: #b96a00; font-size: 28rpx; font-weight: 600; }
-.due-banner-sub { color: #d98c1f; font-size: 24rpx; margin-top: 6rpx; }
-.due-banner-go { color: #f59a23; font-size: 34rpx; font-weight: bold; flex-shrink: 0; }
-
-.menu {
-  display: flex;
-  gap: 24rpx;
-  margin-bottom: 30rpx;
-}
-.menu-btn {
-  flex: 1;
-  background: #fff;
-  border-radius: 20rpx;
-  padding: 40rpx 20rpx;
-  text-align: center;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
-}
-.menu-btn.new { border-top: 8rpx solid #07c160; }
-.menu-btn.review { border-top: 8rpx solid #f59a23; }
-.menu-icon { font-size: 60rpx; }
-.menu-name { font-size: 36rpx; font-weight: bold; margin-top: 12rpx; }
-.menu-desc { font-size: 24rpx; color: #999; margin-top: 10rpx; }
-
+/* ---- 拍照收词 / 错词本（工具区） ---- */
 .photo {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30rpx;
+  margin-bottom: 24rpx;
   border-left: 8rpx solid #576b95;
 }
 .photo-title { font-size: 34rpx; font-weight: bold; }
@@ -153,7 +169,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30rpx;
+  margin-bottom: 24rpx;
   border-left: 8rpx solid #e64340;
 }
 .wrong-title { font-size: 34rpx; font-weight: bold; }
@@ -163,15 +179,16 @@
   text-align: center;
   background: #fff0ef;
   color: #e64340;
-  font-size: 32rpx;
+  font-size: 30rpx;
   font-weight: bold;
   border-radius: 40rpx;
   padding: 10rpx 20rpx;
 }
 .wrong-badge.has { background: #e64340; color: #fff; }
 
+/* ---- 教材进度（R18：批次点阵移出首页，只留进度条 + 百分比） ---- */
 .progress {
-  margin-bottom: 30rpx;
+  margin-bottom: 24rpx;
   border-left: 8rpx solid #07c160;
 }
 .progress-top {
@@ -180,7 +197,7 @@
   align-items: center;
 }
 .progress-title { font-size: 34rpx; font-weight: bold; }
-.progress-count { color: #999; font-size: 24rpx; }
+.progress-count { color: #999; font-size: 22rpx; }
 .progress-bar {
   height: 16rpx;
   background: #f0f0f0;
@@ -189,41 +206,24 @@
   overflow: hidden;
 }
 .progress-fill { height: 100%; background: #07c160; border-radius: 10rpx; }
-.progress-dots {
+.progress-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  margin-top: 20rpx;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16rpx;
 }
-/* 批次点阵：全书每批一个圆点，固定四色语义（与教程总览页一致）
-   done(绿实)   = 已学且 10 次复习全部完成
-   learning(橙描边) = 正在复习中
-   current(绿框) = 当前待学批
-   todo(灰)     = 未学 */
-.dot {
-  width: 22rpx;
-  height: 22rpx;
-  border-radius: 50%;
-  background: #e5e5e5; /* todo */
-}
-.dot.done { background: #07c160; }
-.dot.learning { background: #ffe9aa; border: 2rpx solid #f59a23; box-sizing: border-box; }
-.dot.current { background: #fff; border: 3rpx solid #07c160; box-sizing: border-box; }
-.progress-link {
-  margin-top: 20rpx;
-  color: #576b95;
-  font-size: 26rpx;
-  text-align: right;
-}
+.progress-pct { color: #666; font-size: 26rpx; }
+.progress-link { color: #576b95; font-size: 26rpx; }
 
-.stats { margin-top: 10rpx; }
+/* ---- 统计（R18：删「已学批次」） ---- */
+.stats { margin-bottom: 24rpx; }
 .stats-row {
   display: flex;
   justify-content: space-around;
   text-align: center;
 }
 .stats-num { font-size: 40rpx; font-weight: bold; color: #07c160; }
-.stats-label { font-size: 24rpx; color: #999; margin-top: 8rpx; }
+.stats-label { font-size: 22rpx; color: #999; margin-top: 8rpx; }
 /* 词库总量格：词库页入口（R09），绿色标签区分可点；加 padding 扩大点击热区 */
 .stats-item.tappable { padding: 10rpx 24rpx; }
 .stats-item.tappable .stats-label { color: #07c160; }
@@ -233,3 +233,47 @@
   color: #576b95;
   font-size: 26rpx;
 }
+
+/* ---- R18 家庭榜：名次 + chip 化，唯一切换账号入口 ---- */
+.family-card { margin-bottom: 24rpx; }
+.family-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6rpx;
+}
+.family-title { font-size: 34rpx; font-weight: 600; }
+.family-note { color: #999; font-size: 22rpx; }
+.family-row {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 0;
+  border-bottom: 2rpx solid #f2f2f2;
+}
+.family-row:last-child { border-bottom: none; }
+.family-rank {
+  width: 56rpx;
+  text-align: center;
+  font-size: 34rpx;
+  flex-shrink: 0;
+}
+.family-pet { font-size: 44rpx; margin-right: 16rpx; flex-shrink: 0; }
+.family-info { flex: 1; min-width: 0; }
+.family-name { font-size: 30rpx; color: #333; }
+.family-sub { color: #07c160; font-size: 22rpx; margin-top: 4rpx; }
+.family-right {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  flex-shrink: 0;
+}
+.family-chip {
+  background: #f5f6f8;
+  color: #666;
+  font-size: 22rpx;
+  padding: 6rpx 14rpx;
+  border-radius: 20rpx;
+}
+.family-chip.fire { background: #fff7e6; color: #f59a23; font-weight: 600; }
+.family-zero { color: #bbb; font-size: 22rpx; }
+.family-row.me .family-name { color: #07c160; font-weight: 600; }
