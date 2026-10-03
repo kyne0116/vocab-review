@@ -97,6 +97,28 @@
   flex-shrink: 0;
 }
 
+/* R16-B 复习优先引导条：有到期任务时置顶展示，点击直达复习页 */
+.due-banner {
+  display: flex;
+  align-items: center;
+  background: #fff7e6;
+  border: 2rpx solid #f59a23;
+  border-radius: 20rpx;
+  padding: 24rpx 28rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(245, 154, 35, 0.18);
+  animation: duePulse 2.4s ease-in-out infinite;
+}
+@keyframes duePulse {
+  0%, 100% { box-shadow: 0 4rpx 16rpx rgba(245, 154, 35, 0.18); }
+  50% { box-shadow: 0 6rpx 26rpx rgba(245, 154, 35, 0.34); }
+}
+.due-banner-icon { font-size: 48rpx; margin-right: 22rpx; flex-shrink: 0; }
+.due-banner-main { flex: 1; min-width: 0; }
+.due-banner-title { color: #b96a00; font-size: 28rpx; font-weight: 600; }
+.due-banner-sub { color: #d98c1f; font-size: 24rpx; margin-top: 6rpx; }
+.due-banner-go { color: #f59a23; font-size: 34rpx; font-weight: bold; flex-shrink: 0; }
+
 .menu {
   display: flex;
   gap: 24rpx;

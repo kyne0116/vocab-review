@@ -44,6 +44,16 @@ Page({
     });
   },
 
+  // 当日快测（R16-A）：进复习页 study 模式自测巩固，不写复习记录
+  goQuiz: function () {
+    wx.navigateTo({
+      url: '/pages/review/review?study=1&batchId=' + this.data.batch.batchId,
+      fail: function (err) {
+        wx.showToast({ title: ((err && err.errMsg) || '打开快测失败').slice(0, 40), icon: 'none' });
+      }
+    });
+  },
+
   startMode: function (mode) {
     const items = this.data.batch.words.map(function (w) {
       return { w: w.w, p: w.p || '', m: w.m, revealed: false };

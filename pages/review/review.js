@@ -16,6 +16,9 @@ Page({
     remembered: 0,
     forgot: 0,
     batchNos: '',
+    // R16-A 当日快测（study 模式）专用
+    studyTotal: 0,     // 本批原始词数（不含忘记后重排的副本）
+    firstPass: 0,      // 首次出现即答「记得」的词数
     // 任务看板（空态 empty 时展示）
     streak: 0,
     lastReview: null,
@@ -32,7 +35,9 @@ Page({
   session: null,
 
   onLoad: function (options) {
-    if (options && options.free) {
+    if (options && options.study && options.batchId) {
+      this.initStudy(options.batchId);
+    } else if (options && options.free) {
       this.initFree();
     } else if (options && options.batchId) {
       this.initManual(options.batchId);
@@ -101,6 +106,27 @@ Page({
     this.startQuiz(session);
   },
 
+  // R16-A 当日快测（学习页入口）：整批自测巩固。
+  // 不写复习记录、不动遗忘池、不推进复习次数——初记只求脸熟，可反复做
+  initStudy: function (batchId) {
+    this.mode = 'study';
+    this.studyBatchId = batchId;
+    const rec = store.getRecords().find(function (r) { return r.batchId === batchId; });
+    if (!rec) {
+      this.setData({ state: 'noBatch' });
+      return;
+    }
+    const items = rec.words.map(function (w) {
+      return { word: w.w, phonetic: w.p, meaning: w.m, batchNo: rec.batchNo };
+    });
+    if (items.length === 0) {
+      this.setData({ state: 'manualEmpty' });
+      return;
+    }
+    this.session = { study: true, due: [], items: items };
+    this.startQuiz(this.session);
+  },
+
   startQuiz: function (session) {
     this.setData({
       mode: this.mode,
@@ -114,6 +140,8 @@ Page({
       forgotMap: {},
       remembered: 0,
       forgot: 0,
+      studyTotal: this.mode === 'study' ? session.items.length : 0,
+      firstPass: 0,
       batchNos: '',
       petEmoji: store.getPetInfo().emoji // R12：答对鼓励语带宠物
     });
@@ -156,25 +184,36 @@ Page({
     if (forgot) forgotMap[cur.word] = true;
 
     // 答对且该词在错词本：复习结束时会自动移出（auto/manual 由 finishReview 处理，free 由 finishFreeReview），即时提示
-    if (!forgot && store.inWrongPool(cur.word)) {
+    // 快测不碰错词本（当日新学词不该在池中，防御性跳过）
+    if (!forgot && this.mode !== 'study' && store.inWrongPool(cur.word)) {
       wx.showToast({ title: '已移出错词本', icon: 'none', duration: 800 });
     }
     this.setData({
       forgotMap: forgotMap,
       forgot: this.data.forgot + (forgot ? 1 : 0),
       remembered: this.data.remembered + (forgot ? 0 : 1),
+      firstPass: this.data.firstPass + (!forgot && this.mode === 'study' && !cur.requeued ? 1 : 0),
       feedback: forgot ? 'no' : 'ok'
     });
     if (forgot) {
       // 答错轻振动（多邻国式负反馈；模拟器/不支持机型静默）
       try { wx.vibrateShort({ type: 'light', fail: function () {} }); } catch (e) { /* 低版本无此 API */ }
     }
-    setTimeout(function () { this.advance(); }.bind(this), 650);
+    setTimeout(function () { this.advance(forgot); }.bind(this), 650);
   },
 
   // 反馈展示后进入下一词 / 收尾（R11：从 answer 拆出）
-  advance: function () {
+  advance: function (forgot) {
     tts.stopSpoken(); // 切词前停掉上一词的报读，避免重叠
+    // R16-A 快测：忘记的词回本轮队尾，须再过一遍（同默写模式先例）
+    if (this.mode === 'study' && forgot) {
+      const cur = this.data.current;
+      this.setData({
+        items: this.data.items.concat([{
+          word: cur.word, phonetic: cur.phonetic, meaning: cur.meaning, batchNo: cur.batchNo, requeued: true
+        }])
+      });
+    }
     const next = this.data.index + 1;
     if (next < this.data.items.length) {
       this.setData({
@@ -193,7 +232,8 @@ Page({
   finish: function () {
     if (this.mode === 'free') {
       store.finishFreeReview(this.session, this.data.forgotMap);
-    } else {
+    } else if (this.mode !== 'study') {
+      // 快测不落任何存储（纯巩固，不推进复习进度）
       store.finishReview(this.session, this.data.forgotMap);
     }
     const nos = [];
@@ -288,6 +328,10 @@ Page({
   },
   goNextDue: function () {
     wx.redirectTo({ url: '/pages/review/review?batchId=' + this.data.nextDue.batchId });
+  },
+  // R16-A 快测结果页「再测一遍」：原批重开
+  restartStudy: function () {
+    this.initStudy(this.studyBatchId);
   },
   goBack: function () {
     wx.navigateBack();

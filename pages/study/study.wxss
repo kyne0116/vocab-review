@@ -213,3 +213,19 @@
   border-radius: 50%;
   font-size: 28rpx;
 }
+
+/* R16-A 快测引导条：浏览全部翻开后浮现，点击进入当日快测 */
+.quiz-guide {
+  display: flex;
+  align-items: center;
+  background: #e8f8ef;
+  border: 2rpx solid #07c160;
+  border-radius: 20rpx;
+  padding: 22rpx 28rpx;
+  margin-bottom: 20rpx;
+}
+.quiz-guide-icon { font-size: 44rpx; margin-right: 20rpx; flex-shrink: 0; }
+.quiz-guide-main { flex: 1; min-width: 0; }
+.quiz-guide-title { color: #067a43; font-size: 28rpx; font-weight: 600; }
+.quiz-guide-sub { color: #2a9d6b; font-size: 24rpx; margin-top: 6rpx; }
+.quiz-guide-go { color: #07c160; font-size: 34rpx; font-weight: bold; flex-shrink: 0; }

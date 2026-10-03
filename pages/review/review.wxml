@@ -105,6 +105,7 @@
     </view>
     <view class="progress-text text-muted">
       <block wx:if="{{mode === 'free'}}">{{index + 1}} / {{items.length}} · 错词本自由复习 · 答对自动移出</block>
+      <block wx:elif="{{mode === 'study'}}">{{index + 1}} / {{items.length}} · 第 {{current.batchNo}} 批 · 当日快测 · 忘记的词会再来一遍</block>
       <block wx:else>{{index + 1}} / {{items.length}} · 第 {{current.batchNo}} 批 · 第 {{roundOf(current.batchNo)}} 次复习</block>
     </view>
 
@@ -131,14 +132,26 @@
   <block wx:elif="{{state === 'result'}}">
     <view class="card result">
       <view class="result-icon">🎊</view>
-      <view class="result-title">{{mode === 'free' ? '错词本复习完成' : (mode === 'manual' ? '本批复习完成' : '今日复习完成')}}</view>
-      <view class="result-row">复习单词：{{items.length}} 个</view>
-      <view class="result-row remember">记得：{{remembered}} 个</view>
-      <view class="result-row forget">忘记：{{forgot}} 个</view>
-      <view class="result-note text-muted" wx:if="{{mode === 'free'}}">答对的词已自动移出错词本；忘记的词保留待巩固</view>
-      <view class="result-note text-muted" wx:else>涉及批次：{{batchNos}}</view>
+      <view class="result-title">{{mode === 'free' ? '错词本复习完成' : (mode === 'study' ? '本批快测完成' : (mode === 'manual' ? '本批复习完成' : '今日复习完成'))}}</view>
+      <block wx:if="{{mode === 'study'}}">
+        <view class="result-row">本批单词：{{studyTotal}} 个</view>
+        <view class="result-row remember">一次记得：{{firstPass}} 个</view>
+        <view class="result-row forget" wx:if="{{studyTotal - firstPass > 0}}">多记一遍才记住：{{studyTotal - firstPass}} 个</view>
+        <view class="result-note text-muted">快测只作当天巩固，不计入复习进度；忘记的词明天第 1 次复习还会再见面</view>
+      </block>
+      <block wx:else>
+        <view class="result-row">复习单词：{{items.length}} 个</view>
+        <view class="result-row remember">记得：{{remembered}} 个</view>
+        <view class="result-row forget">忘记：{{forgot}} 个</view>
+        <view class="result-note text-muted" wx:if="{{mode === 'free'}}">答对的词已自动移出错词本；忘记的词保留待巩固</view>
+        <view class="result-note text-muted" wx:else>涉及批次：{{batchNos}}</view>
+      </block>
     </view>
-    <button class="btn-primary" bindtap="goBack">返回首页</button>
+    <block wx:if="{{mode === 'study'}}">
+      <button class="btn-primary" bindtap="restartStudy">再测一遍</button>
+      <button class="btn-plain" style="margin-top:20rpx;" bindtap="goBack">返回</button>
+    </block>
+    <button wx:else class="btn-primary" bindtap="goBack">返回首页</button>
   </block>
 
   <!-- 拓展弹层（R10）：衍生词 / 近义词 / 双语例句 -->

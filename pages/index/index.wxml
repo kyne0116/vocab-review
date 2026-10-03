@@ -25,6 +25,16 @@
     </view>
   </view>
 
+  <!-- R16-B 复习优先引导：有到期任务时醒目提示，先复习再开新词（软引导不拦截） -->
+  <view class="due-banner" wx:if="{{dueCount > 0}}" bindtap="goReview">
+    <view class="due-banner-icon">🔁</view>
+    <view class="due-banner-main">
+      <view class="due-banner-title">今日有 {{todayItems}} 词到期复习（{{dueCount}} 批）</view>
+      <view class="due-banner-sub">先复习，再学新词，记得更牢</view>
+    </view>
+    <view class="due-banner-go">▸</view>
+  </view>
+
   <view class="menu">
     <view class="menu-btn new" bindtap="goNew">
       <view class="menu-icon">📖</view>

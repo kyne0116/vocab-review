@@ -23,6 +23,11 @@
         <view class="mode-name">默写模式</view>
         <view class="mode-desc">看中文拼写英文，错一个字母整词重打，错词自动回队重拼</view>
       </view>
+      <view class="mode-btn" bindtap="goQuiz">
+        <view class="mode-icon">⚡</view>
+        <view class="mode-name">当日快测</view>
+        <view class="mode-desc">刚学的词马上自测一遍，忘记的会再来一次（不计入复习）</view>
+      </view>
     </view>
   </block>
 
@@ -39,6 +44,16 @@
         <view class="link-btn" bindtap="revealAll">全部显示</view>
         <view class="link-btn" bindtap="hideAll">重新开始</view>
       </view>
+    </view>
+
+    <!-- R16-A 全部翻开后浮现快测引导（软引导，不弹窗） -->
+    <view class="quiz-guide" wx:if="{{items.length > 0 && revealedCount === items.length}}" bindtap="goQuiz">
+      <text class="quiz-guide-icon">⚡</text>
+      <view class="quiz-guide-main">
+        <view class="quiz-guide-title">全部翻开了！</view>
+        <view class="quiz-guide-sub">快测一遍，把刚学的词记牢</view>
+      </view>
+      <text class="quiz-guide-go">▸</text>
     </view>
 
     <view class="card list">
