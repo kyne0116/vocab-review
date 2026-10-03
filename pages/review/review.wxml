@@ -100,32 +100,69 @@
 
   <!-- 复习进行中 -->
   <block wx:elif="{{state === 'quiz'}}">
-    <view class="progress-bar">
-      <view class="progress-inner" style="width: {{progress}}%;"></view>
-    </view>
-    <view class="progress-text text-muted">
-      <block wx:if="{{mode === 'free'}}">{{index + 1}} / {{items.length}} · 错词本自由复习 · 答对自动移出</block>
-      <block wx:elif="{{mode === 'study'}}">{{index + 1}} / {{items.length}} · 第 {{current.batchNo}} 批 · 当日快测 · 忘记的词会再来一遍</block>
-      <block wx:else>{{index + 1}} / {{items.length}} · 第 {{current.batchNo}} 批 · 第 {{roundOf(current.batchNo)}} 次复习</block>
+    <!-- R17 视图切换：卡片（逐词）| 列表（整单通览）；快测固定卡片不显示 -->
+    <view class="view-toggle" wx:if="{{mode !== 'study'}}">
+      <view class="vt-btn {{view === 'card' ? 'on' : ''}}" bindtap="switchView" data-v="card">🃏 卡片</view>
+      <view class="vt-btn {{view === 'list' ? 'on' : ''}}" bindtap="switchView" data-v="list">📋 列表</view>
     </view>
 
-    <view class="card quiz-card {{feedback === 'ok' ? 'fb-ok' : ''}} {{feedback === 'no' ? 'fb-no' : ''}}">
-      <view class="quiz-word" bindtap="readCurrent">{{current.word}}</view>
-      <view class="quiz-phonetic" wx:if="{{current.phonetic}}">{{current.phonetic}}</view>
+    <!-- 卡片视图（原有流程） -->
+    <block wx:if="{{view === 'card'}}">
+      <view class="progress-bar">
+        <view class="progress-inner" style="width: {{progress}}%;"></view>
+      </view>
+      <view class="progress-text text-muted">
+        <block wx:if="{{mode === 'free'}}">{{index + 1}} / {{items.length}} · 错词本自由复习 · 答对自动移出</block>
+        <block wx:elif="{{mode === 'study'}}">{{index + 1}} / {{items.length}} · 第 {{current.batchNo}} 批 · 当日快测 · 忘记的词会再来一遍</block>
+        <block wx:else>{{index + 1}} / {{items.length}} · 第 {{current.batchNo}} 批 · 第 {{roundOf(current.batchNo)}} 次复习</block>
+      </view>
 
-      <view wx:if="{{revealed}}" class="quiz-meaning">{{current.meaning}}</view>
-      <view wx:else class="quiz-hint" bindtap="onReveal">点击查看释义</view>
-      <view wx:if="{{revealed}}" class="quiz-ext" catchtap="openQuizLink">🌱 拓展：衍生词 · 近义词 · 例句</view>
-      <view wx:if="{{feedback === 'ok'}}" class="quiz-fb ok">✓ 记住了！{{petEmoji}}</view>
-      <view wx:elif="{{feedback === 'no'}}" class="quiz-fb no">✗ 没关系，再记一次</view>
-    </view>
+      <view class="card quiz-card {{feedback === 'ok' ? 'fb-ok' : ''}} {{feedback === 'no' ? 'fb-no' : ''}}">
+        <view class="quiz-word" bindtap="readCurrent">{{current.word}}</view>
+        <view class="quiz-phonetic" wx:if="{{current.phonetic}}">{{current.phonetic}}</view>
 
-    <button wx:if="{{!revealed}}" class="btn-primary" bindtap="onReveal">显示释义</button>
+        <view wx:if="{{revealed}}" class="quiz-meaning">{{current.meaning}}</view>
+        <view wx:else class="quiz-hint" bindtap="onReveal">点击查看释义</view>
+        <view wx:if="{{revealed}}" class="quiz-ext" catchtap="openQuizLink">🌱 拓展：衍生词 · 近义词 · 例句</view>
+        <view wx:if="{{feedback === 'ok'}}" class="quiz-fb ok">✓ 记住了！{{petEmoji}}</view>
+        <view wx:elif="{{feedback === 'no'}}" class="quiz-fb no">✗ 没关系，再记一次</view>
+      </view>
 
-    <view wx:else class="judge">
-      <button class="judge-btn remember {{feedback ? 'dim' : ''}}" bindtap="onRemember">✓ 记得</button>
-      <button class="judge-btn forget {{feedback ? 'dim' : ''}}" bindtap="onForget">✗ 忘记了</button>
-    </view>
+      <button wx:if="{{!revealed}}" class="btn-primary" bindtap="onReveal">显示释义</button>
+
+      <view wx:else class="judge">
+        <button class="judge-btn remember {{feedback ? 'dim' : ''}}" bindtap="onRemember">✓ 记得</button>
+        <button class="judge-btn forget {{feedback ? 'dim' : ''}}" bindtap="onForget">✗ 忘记了</button>
+      </view>
+    </block>
+
+    <!-- 列表视图（R17）：词单通览，自控节奏，标忘提交 -->
+    <block wx:else>
+      <view class="progress-text text-muted">
+        <block wx:if="{{mode === 'free'}}">错词本自由复习 · 答对自动移出</block>
+        <block wx:elif="{{mode === 'manual'}}">第 {{items[0].batchNo}} 批 · 第 {{roundOf(items[0].batchNo)}} 次复习</block>
+        <block wx:else>今日到期复习</block>
+        · 共 {{items.length}} 词 · 已看 {{revealedCount}} · 忘记 {{forgotCount}}
+      </view>
+
+      <view class="card list-card">
+        <view class="rv-row {{listRevealed[item.word] ? 'seen' : ''}}" wx:for="{{items}}" wx:key="word">
+          <view class="rv-main" bindtap="tapListWord" data-w="{{item.word}}">
+            <view class="rv-head">
+              <view class="rv-word">{{item.word}}</view>
+              <view class="rv-phonic" wx:if="{{item.phonetic}}">[{{item.phonetic}}]</view>
+            </view>
+            <view class="rv-mean" wx:if="{{listRevealed[item.word]}}">{{item.meaning}}</view>
+            <view class="rv-hint" wx:else>点词看释义</view>
+          </view>
+          <view class="rv-link" catchtap="openListLink" data-w="{{item.word}}">🌱</view>
+          <view class="rv-mark {{forgotMap[item.word] ? 'on' : ''}}" catchtap="toggleListForgot" data-w="{{item.word}}">✕</view>
+        </view>
+      </view>
+
+      <view class="list-note text-muted">点单词看释义并朗读 · 看过释义后点 🌱 查拓展 · 圆圈标记忘记的词（不标 = 记得）</view>
+      <button class="btn-primary" bindtap="finishList">完成复习{{forgotCount > 0 ? '（忘 ' + forgotCount + ' 词）' : ''}}</button>
+    </block>
   </block>
 
   <!-- 复习完成 -->

@@ -320,6 +320,16 @@ function setCursor(c) {
   wx.setStorageSync(curKey(), c);
 }
 
+/* ---------- 界面偏好（按账号隔离，R17 复习双视图） ---------- */
+// 'card'=逐词卡片（默认） | 'list'=列表通览；页面内可随时切换，此处记住各账号偏好
+function reviewViewKey() { return 'vocab_review_view_' + currentAccount().id; }
+function getReviewView() {
+  return wx.getStorageSync(reviewViewKey()) === 'list' ? 'list' : 'card';
+}
+function setReviewView(v) {
+  wx.setStorageSync(reviewViewKey(), v === 'list' ? 'list' : 'card');
+}
+
 /* ---------- 日期工具 ---------- */
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 function todayStr() {
@@ -781,5 +791,7 @@ module.exports = {
   PET_STAGES: PET_STAGES,
   getWrongWords: getWrongWords,
   inWrongPool: inWrongPool,
-  removeWrongWord: removeWrongWord
+  removeWrongWord: removeWrongWord,
+  getReviewView: getReviewView,
+  setReviewView: setReviewView
 };

@@ -73,6 +73,76 @@
   font-size: 26rpx;
 }
 
+/* ---- R17 复习双视图：卡片 / 列表切换 + 列表通览 ---- */
+.view-toggle {
+  display: flex;
+  background: #f6f7f9;
+  border-radius: 14rpx;
+  padding: 6rpx;
+  margin-bottom: 20rpx;
+}
+.vt-btn {
+  flex: 1;
+  text-align: center;
+  font-size: 28rpx;
+  color: #666;
+  padding: 12rpx 0;
+  border-radius: 10rpx;
+}
+.vt-btn.on {
+  background: #fff;
+  color: #07c160;
+  font-weight: 600;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.08);
+}
+.list-card { padding: 4rpx 30rpx; }
+.rv-row {
+  display: flex;
+  align-items: center;
+  padding: 22rpx 0;
+  border-bottom: 2rpx solid #f6f6f6;
+}
+.rv-row:last-child { border-bottom: none; }
+.rv-main { flex: 1; min-width: 0; }
+.rv-head { display: flex; align-items: baseline; flex-wrap: wrap; }
+.rv-word { font-size: 34rpx; font-weight: bold; color: #333; }
+.rv-phonic { font-size: 22rpx; color: #999; margin-left: 12rpx; }
+.rv-mean { font-size: 28rpx; color: #07c160; margin-top: 8rpx; }
+.rv-hint { font-size: 24rpx; color: #bbb; margin-top: 8rpx; }
+/* 行内拓展（R17）：占位不渲染移除（visibility），看过释义才亮，避免圆圈位置跳动 */
+.rv-link {
+  flex-shrink: 0;
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  text-align: center;
+  font-size: 28rpx;
+  border-radius: 50%;
+  background: #f2f6f9;
+  margin-left: 12rpx;
+  visibility: hidden;
+}
+.rv-row.seen .rv-link { visibility: visible; }
+.rv-link:active { transform: scale(.9); }
+.rv-mark {
+  flex-shrink: 0;
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  text-align: center;
+  border: 3rpx solid #ddd;
+  border-radius: 50%;
+  color: transparent;
+  font-size: 28rpx;
+  margin-left: 16rpx;
+}
+.rv-mark.on {
+  background: #e64340;
+  border-color: #e64340;
+  color: #fff;
+}
+.list-note { text-align: center; margin: 16rpx 0 24rpx; font-size: 24rpx; }
+
 /* ---- 拓展弹层（R10）：半屏底部弹层 ---- */
 .link-mask {
   position: fixed;

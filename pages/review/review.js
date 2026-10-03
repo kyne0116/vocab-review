@@ -4,7 +4,7 @@ const lk = require('../../utils/lookup.js');
 
 Page({
   data: {
-    mode: 'auto',        // auto=今日到期合并 | manual=总览指定批次 | free=错词本自由复习
+    mode: 'auto',        // auto=今日到期合并 | manual=总览指定批次 | free=错词本自由复习 | study=当日快测
     state: 'empty',      // empty | noBatch | manualEmpty | manualDone | autoDone | freeEmpty | quiz | result
     items: [],
     index: 0,
@@ -16,6 +16,11 @@ Page({
     remembered: 0,
     forgot: 0,
     batchNos: '',
+    // R17 复习双视图：view = card（逐词卡片，默认）| list（列表通览）；快测固定 card
+    view: 'card',
+    listRevealed: {},  // 列表视图：已看过释义的词（与卡片视图的 revealed 互通）
+    revealedCount: 0,  // 列表视图进度：已看释义词数
+    forgotCount: 0,    // 列表视图：已标记忘记词数
     // R16-A 当日快测（study 模式）专用
     studyTotal: 0,     // 本批原始词数（不含忘记后重排的副本）
     firstPass: 0,      // 首次出现即答「记得」的词数
@@ -140,6 +145,11 @@ Page({
       forgotMap: {},
       remembered: 0,
       forgot: 0,
+      // R17：快测的「忘记回队尾再过」依赖顺序出题，固定卡片视图；其余模式用账号偏好
+      view: this.mode === 'study' ? 'card' : store.getReviewView(),
+      listRevealed: {},
+      revealedCount: 0,
+      forgotCount: 0,
       studyTotal: this.mode === 'study' ? session.items.length : 0,
       firstPass: 0,
       batchNos: '',
@@ -158,9 +168,17 @@ Page({
   },
 
   onReveal: function () {
-    this.setData({ revealed: true });
-    // 对齐学习页：显示释义即报读（复习节奏用快读一遍）
+    // 释义展示状态双视图互通：卡片翻开的词切到列表视图时同样显示为已看
     const c = this.data.current;
+    const listRevealed = this.data.listRevealed;
+    let add = 0;
+    if (c && !listRevealed[c.word]) { listRevealed[c.word] = true; add = 1; }
+    this.setData({
+      revealed: true,
+      listRevealed: listRevealed,
+      revealedCount: this.data.revealedCount + add
+    });
+    // 对齐学习页：显示释义即报读（复习节奏用快读一遍）
     if (c) tts.speakPair(c.word, c.meaning, 1, 800);
   },
 
@@ -181,7 +199,9 @@ Page({
     if (this.data.feedback) return; // 反馈动画期间防连点
     const cur = this.data.current;
     const forgotMap = this.data.forgotMap;
+    // 双视图「后判覆盖先判」：列表里标了忘、卡片里又答记得 → 以卡片为准移除标记
     if (forgot) forgotMap[cur.word] = true;
+    else delete forgotMap[cur.word];
 
     // 答对且该词在错词本：复习结束时会自动移出（auto/manual 由 finishReview 处理，free 由 finishFreeReview），即时提示
     // 快测不碰错词本（当日新学词不该在池中，防御性跳过）
@@ -190,6 +210,7 @@ Page({
     }
     this.setData({
       forgotMap: forgotMap,
+      forgotCount: Object.keys(forgotMap).length,
       forgot: this.data.forgot + (forgot ? 1 : 0),
       remembered: this.data.remembered + (forgot ? 0 : 1),
       firstPass: this.data.firstPass + (!forgot && this.mode === 'study' && !cur.requeued ? 1 : 0),
@@ -236,13 +257,91 @@ Page({
       // 快测不落任何存储（纯巩固，不推进复习进度）
       store.finishReview(this.session, this.data.forgotMap);
     }
+    // R17：结果统计以 forgotMap 为准统一口径（卡片/列表/混用三种路径一致）；
+    // 快测沿用 firstPass 口径（列表视图不开放快测，无混用）
+    let remembered = this.data.remembered;
+    let forgot = this.data.forgot;
+    if (this.mode !== 'study') {
+      const seen = {};
+      this.data.items.forEach(function (it) { seen[it.word] = true; });
+      forgot = 0;
+      for (const w in this.data.forgotMap) { if (seen[w]) forgot++; }
+      remembered = Object.keys(seen).length - forgot;
+    }
     const nos = [];
     (this.session.due || []).forEach(function (d) { nos.push('第' + d.batchNo + '批'); });
     this.setData({
       state: 'result',
       progress: 100,
+      remembered: remembered,
+      forgot: forgot,
       batchNos: nos.join('、')
     });
+  },
+
+  /* ---------- R17 列表视图：整批词单通览，自控节奏 ---------- */
+  // 顶部「卡片 / 列表」切换：可中途切换，判定与已看释义跨视图保留
+  switchView: function (e) {
+    const v = e.currentTarget.dataset.v;
+    if (v === this.data.view || this.data.feedback) return; // 反馈动画期间不切
+    tts.stopSpoken();
+    store.setReviewView(v); // 记住账号偏好，下次进复习直接用
+    this.setData({
+      view: v,
+      // 切回卡片时：当前词若已在列表看过释义，直接显示释义与判定按钮
+      revealed: v === 'card' && this.data.current
+        ? !!this.data.listRevealed[this.data.current.word]
+        : false
+    });
+  },
+
+  // 按单词找词条（列表视图行内交互用；同会话内词唯一）
+  findItem: function (w) {
+    for (let i = 0; i < this.data.items.length; i++) {
+      if (this.data.items[i].word === w) return this.data.items[i];
+    }
+    return null;
+  },
+
+  // 点词行：显示释义 + 朗读（与卡片「显示释义」同节奏）
+  tapListWord: function (e) {
+    const w = e.currentTarget.dataset.w;
+    const item = this.findItem(w);
+    if (!item) return;
+    const listRevealed = this.data.listRevealed;
+    let add = 0;
+    if (!listRevealed[w]) { listRevealed[w] = true; add = 1; }
+    this.setData({
+      listRevealed: listRevealed,
+      revealedCount: this.data.revealedCount + add
+    });
+    tts.speakPair(item.word, item.meaning, 1, 800);
+  },
+
+  // 列表行内「🌱 拓展」：与卡片入口同一弹层；看过释义的词才可用（与卡片 revealed 门控一致）
+  openListLink: function (e) {
+    const w = e.currentTarget.dataset.w;
+    if (!this.data.listRevealed[w]) return;
+    const item = this.findItem(w);
+    if (item) this.fetchLink(item.word, item.phonetic || '', item.meaning);
+  },
+
+  // 点圆圈：标记 / 取消「忘记」（未标记 = 记得）
+  toggleListForgot: function (e) {
+    const w = e.currentTarget.dataset.w;
+    const forgotMap = this.data.forgotMap;
+    if (forgotMap[w]) delete forgotMap[w];
+    else {
+      forgotMap[w] = true;
+      try { wx.vibrateShort({ type: 'light', fail: function () {} }); } catch (err) { /* 低版本无此 API */ }
+    }
+    this.setData({ forgotMap: forgotMap, forgotCount: Object.keys(forgotMap).length });
+  },
+
+  // 列表视图底部「完成复习」：与卡片流程共用 finish 收尾
+  finishList: function () {
+    tts.stopSpoken();
+    this.finish();
   },
 
   /* ---------- 拓展弹层（R10）：显示释义后可查看衍生词 / 近义词 / 例句 ---------- */
