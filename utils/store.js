@@ -35,6 +35,14 @@ function switchAccount(id) {
   return false;
 }
 
+function resetAccountProgress(id) {
+  if (!ACCOUNTS.list.some(function (a) { return a.id === id; })) return false;
+  ['vocab_records_', 'vocab_cursor_', 'vocab_photo_words_', 'vocab_photo_sessions_', 'vocab_deleted_', 'vocab_review_view_', 'vocab_pet_stage_'].forEach(function (prefix) {
+    wx.removeStorageSync(prefix + id);
+  });
+  return true;
+}
+
 /* ---------- 拍照生词（R14：并入当前账号；R15：拍照会话整体出批） ---------- */
 // 每个真人账号两条存储：队列 vocab_photo_words_<accountId>（{ w, m, p, addedAt }，去重与
 // 词库页展示）+ 拍照会话 vocab_photo_sessions_<accountId>（{ id, createdAt, words }，一次
@@ -696,7 +704,7 @@ function getPetInfo() {
   const cur = PET_STAGES[stage];
   const nxt = PET_STAGES[stage + 1] || null;
   const pct = nxt
-    ? Math.min(100, Math.round((learned - cur.min) / (nxt.min - cur.min) * 100))
+    ? Math.min(99, Math.round((learned - cur.min) / (nxt.min - cur.min) * 100))
     : 100;
   return {
     stage: stage,
@@ -897,6 +905,7 @@ module.exports = {
   getAccounts: getAccounts,
   currentAccount: currentAccount,
   switchAccount: switchAccount,
+  resetAccountProgress: resetAccountProgress,
   currentBank: currentBank,
   bankOf: bankOf,
   removeWords: removeWords,

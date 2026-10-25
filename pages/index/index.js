@@ -114,23 +114,36 @@ Page({
     const lines = ['今天也要一起背单词哦！', '每学会一个词，我就长大一点点！', '复习做得棒，我最开心啦！', '带我飞向更大的词海吧！'];
     wx.showToast({ title: lines[Math.floor(Math.random() * lines.length)], icon: 'none', duration: 2000 });
   },
-  // 头部卡「切换账号 ▸」：滚动定位到家庭榜（R18：家庭榜为唯一切换入口，不再弹 ActionSheet）
-  goFamily: function () {
-    if (this.data.family.length < 2) return;
-    wx.pageScrollTo({
-      selector: '.family-card',
-      duration: 300,
-      fail: function () { /* 低版本基础库不支持 selector 时静默，家庭榜仍可手动滚动触达 */ }
+  chooseAccount: function () {
+    const that = this;
+    wx.showActionSheet({
+      itemList: store.getAccounts().map(function (a) { return a.name; }),
+      success: function (res) {
+        const account = store.getAccounts()[res.tapIndex];
+        if (!account || account.id === store.currentAccount().id) return;
+        store.switchAccount(account.id);
+        that.refresh();
+        wx.showToast({ title: '已切换：' + account.name, icon: 'none' });
+      }
     });
   },
-  // 使用指南占位（R18 拍板③）：四步速览弹层；完整指南页另起一轮
-  showGuide: function () {
+  resetProgress: function () {
+    const that = this;
     wx.showModal({
-      title: '📖 使用指南',
-      content: '① 每天先完成到期复习，再学新词（21天记忆法）\n② 新单词按教材顺序，每批 ' + store.BATCH_SIZE + ' 词\n③ 拍课本照片，AI 识别生词并收录，优先学习\n④ 答错的词进错词本，掌握后移出',
-      showCancel: false,
-      confirmText: '知道了'
+      title: '重新开始学习？',
+      content: '将清空当前账号的学习、复习、错词和拍照收词数据，恢复为教材初始状态。',
+      confirmText: '确认初始化',
+      confirmColor: '#e64340',
+      success: function (res) {
+        if (!res.confirm) return;
+        store.resetAccountProgress(store.currentAccount().id);
+        that.refresh();
+        wx.showToast({ title: '已恢复初始状态', icon: 'none' });
+      }
     });
+  },
+  showGuide: function () {
+    wx.navigateTo({ url: '/pages/guide/guide' });
   },
   goNew: function () { wx.navigateTo({ url: '/pages/new/new' }); },
   goPhoto: function () { wx.navigateTo({ url: '/pages/photo/photo' }); },

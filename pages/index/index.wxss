@@ -277,3 +277,10 @@
 .family-chip.fire { background: #fff7e6; color: #f59a23; font-weight: 600; }
 .family-zero { color: #bbb; font-size: 22rpx; }
 .family-row.me .family-name { color: #07c160; font-weight: 600; }
+
+.account-tools { margin-bottom: 24rpx; }
+.account-tools-title { font-size: 32rpx; font-weight: 600; }
+.account-tools-sub { color: #999; font-size: 24rpx; margin-top: 8rpx; }
+.account-actions { display: flex; gap: 20rpx; margin-top: 20rpx; }
+.account-action { flex: 1; margin: 0; color: #07c160; background: #eefaf2; font-size: 28rpx; }
+.account-action.danger { color: #e64340; background: #fff0ef; }

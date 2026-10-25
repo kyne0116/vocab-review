@@ -121,4 +121,9 @@
       </view>
     </view>
   </view>
+  <view class="card account-tools">
+    <view class="account-tools-title">账号与学习初始化</view>
+    <view class="account-tools-sub">清空当前账号，重新开始学习</view>
+    <button class="account-action danger" bindtap="resetProgress">一键初始化</button>
+  </view>
 </view>

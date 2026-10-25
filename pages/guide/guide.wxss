@@ -1,0 +1,11 @@
+page { background: #f6f7f9; }
+.guide { padding-bottom: 40rpx; }
+.hero { display:flex; align-items:center; background:linear-gradient(135deg,#07c160,#36cfc9); color:#fff; padding:44rpx 32rpx; margin:-24rpx -24rpx 24rpx; }
+.hero-icon { font-size:72rpx; margin-right:24rpx; }
+.hero-title { font-size:42rpx; font-weight:700; }
+.hero-sub { font-size:24rpx; margin-top:8rpx; opacity:.9; }
+.step { display:flex; align-items:flex-start; margin-bottom:20rpx; padding:28rpx; }
+.step-icon { font-size:54rpx; width:76rpx; flex-shrink:0; }
+.step-title { font-size:31rpx; font-weight:600; color:#222; }
+.step-text { color:#666; font-size:26rpx; line-height:1.6; margin-top:8rpx; }
+.reset-tip { color:#999; font-size:24rpx; text-align:center; padding:14rpx; }

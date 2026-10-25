@@ -10,6 +10,7 @@
     "pages/photo/photo",
     "pages/bank/bank",
     "pages/spell/spell"
+    ,"pages/guide/guide"
   ],
   "window": {
     "navigationBarBackgroundColor": "#07c160",

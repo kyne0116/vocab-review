@@ -1,0 +1,9 @@
+﻿<view class="guide page">
+  <view class="hero"><text class="hero-icon">🚀</text><view><view class="hero-title">启航成长记</view><view class="hero-sub">每天一点点，陪孩子学会更多词</view></view></view>
+  <view class="step card"><text class="step-icon">👨‍👩‍👧</text><view><view class="step-title">1. 先选账号</view><view class="step-text">在首页底部选择小学或初中账号。两个词库和学习进度彼此独立。</view></view></view>
+  <view class="step card"><text class="step-icon">📖</text><view><view class="step-title">2. 学一批新词</view><view class="step-text">点击“新单词”，按顺序学习教材词；拍照收词后会优先学习照片中的词。</view></view></view>
+  <view class="step card"><text class="step-icon">🔁</text><view><view class="step-title">3. 按时复习</view><view class="step-text">首页有到期提醒。复习时选择“记得”或“忘记”，系统会安排接下来的 10 轮复习。</view></view></view>
+  <view class="step card"><text class="step-icon">📷</text><view><view class="step-title">4. 拍照收词</view><view class="step-text">拍课本或练习册，确认识别结果和释义后收录。网络不可用时会尝试本机识别。</view></view></view>
+  <view class="step card"><text class="step-icon">🐣</text><view><view class="step-title">5. 看成长反馈</view><view class="step-text">宠物、错词本、教材总览和学习记录，帮助你知道学了多少、哪些词还要巩固。</view></view></view>
+  <view class="reset-tip">想从头开始？回到首页底部点击“一键初始化”。</view>
+</view>
