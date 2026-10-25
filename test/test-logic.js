@@ -62,7 +62,7 @@ s = store.buildReviewSession();
 eq(s.items.length, 35, '第2次复习全部35词');
 store.finishReview(s, {});
 // 全量轮答对：上一轮忘记的词从遗忘池（错词本）移出
-eq(store.getRecords()[0].wrongPool.length, 0, '全量轮答对即移出遗忘池');
+eq(store.getRecords()[0].wrongPool.length, 5, '全量轮首次答对仍保留遗忘池');
 
 // 第3天：第3次复习，全部35词，再忘2个（第10、11词）
 setDay(2026, 9, 4);
@@ -83,20 +83,20 @@ const poolWords = store.getRecords()[0].wrongPool.map(w => w.w);
 const forgot4 = {};
 forgot4[poolWords[1]] = true;
 store.finishReview(s, forgot4);
-eq(store.getRecords()[0].wrongPool.length, 1, '遗忘词轮答对移出、答错保留');
+eq(store.getRecords()[0].wrongPool.length, 2, '遗忘词需连续答对2次，首次答对仍保留');
 eq(store.getRecords()[0].reviewsDone, 4, '已完成4次复习');
 
 // 第6天(9/7)：第5次复习，2词
 setDay(2026, 9, 7);
 s = store.buildReviewSession();
-eq(s.items.length, 1, '第5次复习遗忘池1词');
+eq(s.items.length, 2, '第5次复习遗忘池2词（待连续答对）');
 store.finishReview(s, {});
-eq(store.getRecords()[0].wrongPool.length, 0, '第5次答对后遗忘池清空');
+eq(store.getRecords()[0].wrongPool.length, 1, '第5次答对后仍保留待第二次确认的词');
 
 // 遗忘池清空后，第8天(9/9)第6次复习自动完成
 setDay(2026, 9, 9);
 s = store.buildReviewSession();
-eq(s.items.length, 0, '遗忘池空则无复习内容');
+eq(s.items.length, 1, '遗忘池仍有待第二次确认的词');
 store.finishReview(s, {});
 eq(store.getRecords()[0].reviewsDone, 6, '空池轮自动计次');
 
@@ -254,7 +254,7 @@ eq(store.getRecords()[0].wrongPool.length, 2, '答错进入遗忘池');
 s9 = store.buildBatchReviewSession(rec9.batchId);
 eq(s9.items.length, 35, '第2轮仍复习全部35词');
 store.finishReview(s9, {});
-eq(store.getRecords()[0].wrongPool.length, 0, '全对移出遗忘池');
+eq(store.getRecords()[0].wrongPool.length, 2, '全量轮首次答对仍保留遗忘池');
 // 推进到 reviewsDone=3，第4轮起复习遗忘池（当前为空）
 s9 = store.buildBatchReviewSession(rec9.batchId);
 store.finishReview(s9, {});
@@ -883,7 +883,7 @@ eq(fc25[0].date, '2027-04-06', '批2第1轮在4/6（全量轮）');
 eq(fc25[0].words, 35, '批2到期词数=全量35');
 eq(fc25[0].overdue, false, '未逾期');
 eq(fc25[1].date, '2027-04-07', '批1第5轮在4/7');
-eq(fc25[1].words, 1, '批1到期词数=遗忘池1词（巩固轮口径）');
+eq(fc25[1].words, 2, '批1到期词数=遗忘池2词（巩固轮口径）');
 
 // 逾期：两批节点均已过 → 归入今天并标 overdue，同日聚合
 setDay(2027, 4, 10);
@@ -892,7 +892,7 @@ eq(fc25b.length, 1, '逾期批次归入今天聚合');
 eq(fc25b[0].date, '2027-04-10', '聚合在今天');
 eq(fc25b[0].days, 0, 'days=0');
 eq(fc25b[0].overdue, true, '标记逾期');
-eq(fc25b[0].words, 36, '同日两批合计36词（池1+全量35，无重复词）');
+eq(fc25b[0].words, 37, '同日两批合计37词（池2+全量35，无重复词）');
 eq(fc25b[0].batches.length, 2, '批次明细保留两批');
 eq(store.getReviewForecast(0).length, 1, 'days=0 只含今天');
 
@@ -958,8 +958,25 @@ storage.vocab_records_junior = [{
 }];
 eq(store.getAccuracySummary().acc, 75, '旧记录（无forgot）正确率正常 3/4');
 eq(store.getStubbornWords().length, 0, '旧记录无逐词数据不进顽固词（不炸）');
+ 
+ 
+ 
 
-
-
+// ---- R22：全量复习轮也累计遗忘词连续答对次数 ----
+storage.vocab_records_junior = []; storage.vocab_cursor_junior = 0;
+setDay(2027, 5, 1);
+store.saveLearnedBatch(store.nextBatch());
+setDay(2027, 5, 2);
+let s22 = store.buildReviewSession();
+const f22 = {}; f22[s22.items[0].word] = true;
+store.finishReview(s22, f22);
+setDay(2027, 5, 3);
+s22 = store.buildReviewSession();
+store.finishReview(s22, {});
+eq(store.getRecords()[0].wrongPool.length, 1, '全量轮首次答对后遗忘词仍保留');
+setDay(2027, 5, 4);
+s22 = store.buildReviewSession();
+store.finishReview(s22, {});
+eq(store.getRecords()[0].wrongPool.length, 0, '全量轮连续两次答对后移出遗忘池');
 
 

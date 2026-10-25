@@ -397,6 +397,7 @@ function saveLearnedBatch(batch) {
     words: batch.words,        // 内容快照，词库改动不影响历史
     reviewsDone: 0,            // 已完成复习次数（0~10）
     wrongPool: [],             // 遗忘池：做错/忘记的词
+    correctStreak: {},         // 遗忘词连续正式答对次数（达到2次才移出）
     reviewHistory: []          // 每次复习的记录 {date, round, total, wrong}
   });
   saveRecords(rs);
@@ -449,11 +450,18 @@ function finishReview(session, forgotMap) {
     const rec = rs.find(function (x) { return x.batchId === due.batchId; });
     if (!rec) return;
     const round = rec.reviewsDone; // 本次是第 round+1 次复习
+    rec.correctStreak = rec.correctStreak || {};
     let source;
     if (round < FULL_REVIEW_ROUNDS) {
       source = rec.words;
-      // 全量复习轮：忘记的词进入遗忘池；答对的词从遗忘池移出（错词本同步移除）
-      rec.wrongPool = rec.wrongPool.filter(function (x) { return !!forgotMap[x.w]; });
+      // 全量复习轮：忘记的词进入遗忘池；答对需连续两次才移出
+      source.forEach(function (w) {
+        if (forgotMap[w.w]) rec.correctStreak[w.w] = 0;
+        else rec.correctStreak[w.w] = (rec.correctStreak[w.w] || 0) + 1;
+      });
+      rec.wrongPool = rec.wrongPool.filter(function (x) {
+        return !!forgotMap[x.w] || (rec.correctStreak[x.w] || 0) < 2;
+      });
       source.forEach(function (w) {
         if (forgotMap[w.w] && !rec.wrongPool.some(function (x) { return x.w === w.w; })) {
           rec.wrongPool.push(w);
@@ -462,7 +470,15 @@ function finishReview(session, forgotMap) {
     } else {
       source = rec.wrongPool;
       // 遗忘词复习轮：答对移出遗忘池，答错保留
-      rec.wrongPool = rec.wrongPool.filter(function (w) { return !!forgotMap[w.w]; });
+      rec.correctStreak = rec.correctStreak || {};
+      rec.wrongPool = rec.wrongPool.filter(function (w) {
+        if (forgotMap[w.w]) { rec.correctStreak[w.w] = 0; return true; }
+        rec.correctStreak[w.w] = (rec.correctStreak[w.w] || 0) + 1;
+        return rec.correctStreak[w.w] < 2;
+      });
+      source.forEach(function (w) {
+        if (forgotMap[w.w]) rec.correctStreak[w.w] = 0;
+      });
     }
     const total = source.length;
     const wrongList = source.filter(function (w) { return !!forgotMap[w.w]; });
@@ -885,10 +901,25 @@ function getStubbornWords(limit) {
 function getStats() {
   const rs = getRecords();
   const session = buildReviewSession();
+  const learnedSet = {};
+  const masteredSet = {};
+  const activePool = {};
+  rs.forEach(function (r) {
+    r.words.forEach(function (w) { learnedSet[w.w] = true; });
+    r.wrongPool.forEach(function (w) { activePool[w.w] = true; });
+    if (r.reviewsDone >= OFFSETS.length && r.wrongPool.length === 0) {
+      r.words.forEach(function (w) { masteredSet[w.w] = true; });
+    }
+  });
+  Object.keys(activePool).forEach(function (w) { delete masteredSet[w]; });
+  const learned = Object.keys(learnedSet).length;
+  const mastered = Object.keys(masteredSet).length;
   return {
     account: currentAccount(),
     batches: rs.length,
-    learned: distinctLearnedCount(rs), // R15：按词去重（拍照批含已收录灰词）
+    learned: learned, // 按词去重（拍照批含已收录灰词）
+    learning: Math.max(0, learned - mastered),
+    mastered: mastered,
     totalWords: currentBank().length + getAccountPhotoWords(currentAccount().id).length,
     dueCount: session.due.length,
     todayItems: session.items.length,

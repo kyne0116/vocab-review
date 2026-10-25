@@ -3,7 +3,7 @@
   <view class="card head">
     <view class="head-top">
       <view class="head-slogan">21天记忆法 · AI 拍照收词与拓展</view>
-      <view class="head-help" bindtap="showGuide">?</view>
+      <view class="head-help" bindtap="showGuide">使用指南</view>
     </view>
     <view class="head-main">
       <view class="head-name">{{accountName}}</view>
@@ -94,6 +94,10 @@
         <view class="stats-num">{{totalWords}}</view>
         <view class="stats-label">词库总量 ▸</view>
       </view>
+    </view>
+    <view class="stats-row status-row">
+      <view class="stats-item"><view class="stats-num">{{learning}}</view><view class="stats-label">复习中</view></view>
+      <view class="stats-item"><view class="stats-num">{{mastered}}</view><view class="stats-label">已掌握</view></view>
     </view>
     <view class="history-link" bindtap="goHistory">查看学习记录（日期与内容）→</view>
   </view>

@@ -17,7 +17,7 @@
   letter-spacing: 1rpx;
 }
 .head-help {
-  width: 44rpx;
+  min-width: 108rpx;
   height: 44rpx;
   line-height: 44rpx;
   text-align: center;
