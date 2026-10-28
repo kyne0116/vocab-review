@@ -222,6 +222,76 @@ Page({
     });
   },
 
+  /* ---------- 手动添加单词（2026-10-27：识别完成后补录漏识别/被过滤的词） ---------- */
+  // 候选页与查义结果页列表底部均可「＋ 添加单词」：校验与查重同「修改」；已收录词置灰
+  // 随批学不经查义（R15）；结果页补录的新词即时单独查义（同有道），失败同「待补义」不收录
+  addWord: function () {
+    const that = this;
+    const atResult = this.data.stage === 'result';
+    if (atResult && this._adding) return;
+    wx.showModal({
+      title: '添加单词',
+      editable: true,
+      placeholderText: '如：apple',
+      success: function (res) {
+        if (!res.confirm) return;
+        const w = (res.content || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        if (!w) return;
+        if (!/^[a-z][a-z' \-]*$/.test(w)) {
+          return wx.showToast({ title: '仅支持英文单词或短语', icon: 'none' });
+        }
+        let idx = -1;
+        that.data.candidates.forEach(function (x, i) { if (idx < 0 && x.w === w) idx = i; });
+        if (idx > -1) {
+          const c = that.data.candidates[idx];
+          if (c.known) return wx.showToast({ title: '「' + w + '」已收录，将随本批学习', icon: 'none' });
+          if (!atResult || c.checked) {
+            return wx.showToast({
+              title: atResult ? '「' + w + '」已在本次清单' : '候选中已有「' + w + '」',
+              icon: 'none'
+            });
+          }
+          // 结果页命中此前未勾选的候选 = 补选：勾选原行后单独查义，不新建候选行
+          const upd = {};
+          upd['candidates[' + idx + '].checked'] = true;
+          upd.checkedCount = that.data.checkedCount + 1;
+          that.setData(upd);
+          that.appendEntry(w);
+          return;
+        }
+        // 与收录同规则：命中当前账号有效库或拍照队列 → 置灰（R15 随批学），不经查义
+        if (store.inCurrentBank(w)) {
+          that.setData({
+            candidates: that.data.candidates.concat([{ w: w, known: true, checked: false, note: '手动添加' }]),
+            knownCount: that.data.knownCount + 1
+          });
+          return wx.showToast({ title: '「' + w + '」已收录，将随本批学习', icon: 'none' });
+        }
+        that.setData({
+          candidates: that.data.candidates.concat([{ w: w, known: false, checked: true, note: '手动添加' }]),
+          checkedCount: that.data.checkedCount + 1
+        });
+        // 候选页添加等「查询释义」统一批量查；结果页添加即时单独查义
+        if (atResult) that.appendEntry(w);
+      }
+    });
+  },
+
+  // 结果页补录：单独查义并追加到结果列表（lookup 为 resolve-only，失败即「待补义」，可重试/AI 纠错）
+  appendEntry: function (word) {
+    const that = this;
+    this._adding = true;
+    wx.showLoading({ title: '查询释义…', mask: true });
+    lookup.lookup(word).then(function (r) {
+      that._adding = false;
+      wx.hideLoading();
+      if (that.data.stage !== 'result') return; // 查义期间已重拍/收录则丢弃，避免写入过期状态
+      const upd = { entries: that.data.entries.concat([r]) };
+      if (r.ok) upd.okCount = that.data.okCount + 1;
+      that.setData(upd);
+    });
+  },
+
   /* ---------- 批量查义 ---------- */
   lookupMeanings: function () {
     const words = this.data.candidates.filter(function (c) { return c.checked; })

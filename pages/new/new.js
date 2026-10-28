@@ -1,5 +1,6 @@
 const store = require('../../utils/store.js');
 const tts = require('../../utils/tts.js');
+const lookup = require('../../utils/lookup.js');
 
 Page({
   data: {
@@ -90,6 +91,74 @@ Page({
 
   onUnload: function () {
     this.stopLearn(); // 离开页面停止连读与自动学习
+  },
+
+  // 增删词后重算当前批并刷新页面
+  refreshBatch: function () {
+    this.setData({
+      batch: store.nextBatch(),
+      totalWords: store.getStats().totalWords
+    });
+  },
+
+  /* ---------- 添加 / 删除本批单词（2026-10-27） ---------- */
+  // 添加：输入单词 → 有道查义（同拍照页）→ store.addToCurrentBatch 加入当前待学批
+  // （拍照批 = 追加进会话；教材批 = 手动补充词随批合并，完成学习时一起记入并清空）。
+  // 查义失败不添加（同拍照页「查义失败不收录」规则）
+  addWord: function () {
+    const that = this;
+    if (this._adding) return;
+    wx.showModal({
+      title: '添加单词',
+      editable: true,
+      placeholderText: '如：apple',
+      success: function (res) {
+        if (!res.confirm) return;
+        const w = (res.content || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        if (!w) return;
+        if (!/^[a-z][a-z' \-]*$/.test(w)) {
+          return wx.showToast({ title: '仅支持英文单词或短语', icon: 'none' });
+        }
+        const words = (that.data.batch && that.data.batch.words) || [];
+        if (words.some(function (x) { return x.w === w; })) {
+          return wx.showToast({ title: '本批已有「' + w + '」', icon: 'none' });
+        }
+        that._adding = true;
+        wx.showLoading({ title: '查询释义…', mask: true });
+        lookup.lookup(w).then(function (r) {
+          that._adding = false;
+          wx.hideLoading();
+          if (!r.ok) return wx.showToast({ title: '查义失败，未添加，请稍后重试', icon: 'none' });
+          store.addToCurrentBatch({ w: w, m: r.m || '', p: r.p || '' });
+          that.refreshBatch();
+          wx.showToast({ title: '已加入本批', icon: 'none' });
+        });
+      }
+    });
+  },
+
+  // 删除：与词库页同义的账号级删除（removeWords 联动清理复习批次与错词本）
+  deleteWord: function (e) {
+    const idx = e.currentTarget.dataset.idx;
+    const item = this.data.batch && this.data.batch.words && this.data.batch.words[idx];
+    if (!item) return;
+    const that = this;
+    const learned = store.getRecords().some(function (r) {
+      return r.words.some(function (x) { return x.w === item.w; });
+    });
+    wx.showModal({
+      title: '删除「' + item.w + '」？',
+      content: learned
+        ? '该词已在复习批次中，删除后将同时从复习与错词本移除，历史学习记录保留。'
+        : '删除后该词不再进入学习。',
+      success: function (res) {
+        if (!res.confirm) return;
+        that.stopLearn(); // 删词使连播索引失效，先停
+        store.removeWords([item.w]);
+        that.refreshBatch();
+        wx.showToast({ title: '已删除', icon: 'none' });
+      }
+    });
   },
 
   onDone: function () {

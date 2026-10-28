@@ -979,4 +979,78 @@ s22 = store.buildReviewSession();
 store.finishReview(s22, {});
 eq(store.getRecords()[0].wrongPool.length, 0, '全量轮连续两次答对后移出遗忘池');
 
+// ---- 场景26：新单词页增删本批单词（手动补充词 + 会话追加 + 删除联动，2026-10-27） ----
+storage.vocab_records_junior = []; storage.vocab_cursor_junior = 0;
+storage.vocab_photo_words_junior = [];
+storage.vocab_photo_sessions_junior = [];
+delete storage.vocab_batch_extras_junior;
+setDay(2027, 6, 1);
+const bank26 = store.currentBank().slice();
+
+// 26a 教材批加词：并入当前批末尾、入拍照队列；重复加词被拒
+eq(store.addToCurrentBatch({ w: 'exa', m: 'n. 补充A', p: 'pA' }), true, '加词返回true');
+eq(store.addToCurrentBatch({ w: 'exa', m: 'x' }), false, '重复词返回false');
+const b26 = store.nextBatch();
+eq(b26.photo, undefined, '无会话时仍为教材批');
+eq(b26.words.length, 36, '当前批 = 35 + 1 补充词');
+eq(b26.words[35], { w: 'exa', m: 'n. 补充A', p: 'pA' }, '补充词带释义音标置于批末');
+eq(b26.end - b26.start + 1, 35, 'start/end 保持教材切片口径');
+eq(store.getAccountPhotoWords('junior').some(x => x.w === 'exa'), true, '补充词入拍照队列');
+eq(store.getStats().totalWords, bank26.length + 1, '词库总量 +1');
+const ov26 = store.getOverview();
+eq(ov26.batches.filter(x => x.state === 'current')[0].count, 36, '总览当前批含补充词（与 nextBatch 同口径）');
+
+// 26a2 加静态库已有词：取词库快照、不入队列（随批再学）
+const bk26 = bank26[100];
+eq(store.addToCurrentBatch({ w: bk26.w, m: '' }), true, '加库中已有词');
+const b26b = store.nextBatch();
+eq(b26b.words.length, 37, '再并入1词');
+eq(b26b.words[36].w, bk26.w, '库中词并入批末');
+eq(b26b.words[36].m, bk26.m, '释义取词库快照（非传入空值）');
+eq(store.getAccountPhotoWords('junior').length, 1, '库中词不入队列');
+
+// 26b 删除联动：删库中补充词 → extras 同步清理 + 静态软删除
+store.removeWords([bk26.w]);
+eq(storage.vocab_batch_extras_junior.length, 1, 'extras 移除被删词');
+const b26c = store.nextBatch();
+eq(b26c.words.length, 36, '批内不再含被删词');
+
+// 26c 完成学习：快照含补充词、extras 清空、游标推进不含补充词
+store.saveLearnedBatch(b26c);
+eq(store.getRecords()[0].words.length, 36, '快照 36 词（35 静态 + exa）');
+eq(storage.vocab_batch_extras_junior, [], '完成学习清空 extras');
+eq(storage.vocab_cursor_junior, 35, '游标推进 35（补充词不占游标）');
+const b26d = store.nextBatch();
+eq(b26d.start, 35, '下一批从第 35 位继续');
+eq(b26d.words.some(x => x.w === 'exa'), false, '补充词不重复进后续批');
+
+// 26d 拍照批加词：追加进当前会话；新词入队列、库中词取快照
+store.savePhotoSession([{ w: 'ph1', m: 'n. 照1' }]);
+const bk26b = store.currentBank()[40]; // 已删1词后重取（删除位置在100，不影响前段）
+eq(store.addToCurrentBatch({ w: 'ph2', m: 'n. 照2', p: 'p2' }), true, '拍照批加新词');
+eq(store.addToCurrentBatch({ w: bk26b.w, m: '' }), true, '拍照批加库中词');
+const ses26 = store.getPhotoSessions('junior');
+eq(ses26[ses26.length - 1].words.map(w => w.w).join(','), ['ph1', 'ph2', bk26b.w].join(','), '会话词单按序追加');
+eq(ses26[ses26.length - 1].words[2].m, bk26b.m, '库中词取快照释义');
+eq(store.getAccountPhotoWords('junior').filter(x => x.w === 'ph2').length, 1, '新词入队列');
+eq(store.getAccountPhotoWords('junior').some(x => x.w === bk26b.w), false, '库中词不入队列');
+// 删会话词：队列与会话同步清理
+store.removeWords(['ph2']);
+const ses26b = store.getPhotoSessions('junior');
+eq(ses26b[ses26b.length - 1].words.map(w => w.w).join(','), ['ph1', bk26b.w].join(','), '会话移除被删词');
+eq(store.getAccountPhotoWords('junior').some(x => x.w === 'ph2'), false, '队列移除被删词');
+
+// 26e extras-only 边界：库尽后补充词仍可出批，记入后游标不动
+store.removeWords(['ph1', bk26b.w]); // 清空会话（bk26b 静态词同步软删除）
+eq(store.getPhotoSessions('junior').length, 0, '会话删空移除');
+storage.vocab_cursor_junior = store.currentBank().length; // 游标推到库尾
+eq(store.nextBatch(), null, '库尾无补充词 → null');
+eq(store.addToCurrentBatch({ w: 'exz', m: 'n. 边界' }), true, '库尾仍可加词');
+const b26e = store.nextBatch();
+eq(b26e !== null && b26e.words.length === 1 && b26e.words[0].w === 'exz', true, '纯补充词成批');
+eq(b26e.start - b26e.end, 1, '空切片区间（start = end + 1）');
+store.saveLearnedBatch(b26e);
+eq(storage.vocab_cursor_junior, store.currentBank().length, '完成学习游标不动');
+eq(store.nextBatch(), null, 'extras 清空后回到 null');
+
 

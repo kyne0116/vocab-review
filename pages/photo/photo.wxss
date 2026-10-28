@@ -79,6 +79,14 @@
   flex-shrink: 0;
 }
 
+/* 手动补录入口：候选/结果列表底部「＋ 添加单词」（2026-10-27），补录词走同一查义与收录管线 */
+.cand-add {
+  padding: 24rpx 0 6rpx;
+  color: #576b95;
+  font-size: 28rpx;
+  text-align: center;
+}
+
 .big-num {
   font-size: 72rpx;
   font-weight: bold;

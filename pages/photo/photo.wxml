@@ -50,6 +50,7 @@
         <view class="cand-tag" wx:if="{{item.known}}">已收录</view>
         <view class="cand-edit" catchtap="editCandidate" data-idx="{{index}}">修改</view>
       </view>
+      <view class="cand-add" bindtap="addWord">＋ 添加单词</view>
     </view>
     <button class="btn-primary act-btn" bindtap="lookupMeanings">查询释义（{{checkedCount}} 词）</button>
     <button class="btn-plain act-btn" bindtap="again">重新拍照</button>
@@ -88,6 +89,7 @@
           </view>
         </view>
       </view>
+      <view class="cand-add" bindtap="addWord">＋ 添加单词</view>
     </view>
     <button class="btn-primary act-btn" bindtap="save">收录本批（新 {{okCount}} + 已收 {{knownCount}}）</button>
     <view class="text-muted pending-tip" wx:if="{{entries.length - okCount > 0}}">

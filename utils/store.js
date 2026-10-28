@@ -37,7 +37,7 @@ function switchAccount(id) {
 
 function resetAccountProgress(id) {
   if (!ACCOUNTS.list.some(function (a) { return a.id === id; })) return false;
-  ['vocab_records_', 'vocab_cursor_', 'vocab_photo_words_', 'vocab_photo_sessions_', 'vocab_deleted_', 'vocab_review_view_', 'vocab_pet_stage_'].forEach(function (prefix) {
+  ['vocab_records_', 'vocab_cursor_', 'vocab_photo_words_', 'vocab_photo_sessions_', 'vocab_deleted_', 'vocab_review_view_', 'vocab_batch_extras_', 'vocab_pet_stage_'].forEach(function (prefix) {
     wx.removeStorageSync(prefix + id);
   });
   return true;
@@ -279,6 +279,10 @@ function removeWords(words) {
     if (ws.length) keptSessions.push({ id: s.id, createdAt: s.createdAt, words: ws });
   });
   if (sesChanged) wx.setStorageSync(photoSessionsKey(acc.id), keptSessions);
+  // 手动补充词同步清理（新单词页加的词被删）
+  const extras = getBatchExtras();
+  const keptExtras = extras.filter(function (x) { return !set[x.w]; });
+  if (keptExtras.length !== extras.length) wx.setStorageSync(batchExtrasKey(), keptExtras);
   // 静态词库：软删除
   const bank = currentBank();
   const kept = bank.filter(function (x) { return !set[x.w]; });
@@ -359,9 +363,18 @@ function diffDays(a, b) {
 }
 
 /* ---------- 新单词 ---------- */
+// 手动补充词（2026-10-27 新单词页「添加单词」）：教材批进行中手动加的词存
+// vocab_batch_extras_<账号>，nextBatch 合并进当前教材批末尾；完成学习随快照记入后
+// 清空；词本身同时入拍照队列（词库页可查、计入总量）。删除走 removeWords 联动清理。
+function batchExtrasKey() { return 'vocab_batch_extras_' + currentAccount().id; }
+function getBatchExtras() {
+  return wx.getStorageSync(batchExtrasKey()) || [];
+}
+
 // 取下一批单词：R15 起待学拍照会话整体优先出批（一次拍照 = 一个学习单元，「拍了就学」，
 // 不受 BATCH_SIZE 限制——用户拍板：识别多少学多少），会话学完回落静态词库顺序（游标
-// 推进）。词库与队列都用完返回 null。
+// 推进）。教材批 = 游标起 35 词切片 + 手动补充词（末尾去重合并，start/end 与游标推进
+// 保持切片口径，补充词不占游标）。词库与队列都用完返回 null。
 function nextBatch() {
   const ses = getPhotoSessions(currentAccount().id).find(function (s) { return s.words && s.words.length; });
   if (ses) {
@@ -375,14 +388,67 @@ function nextBatch() {
   }
   const words = currentBank();
   const cursor = getCursor();
-  if (cursor >= words.length) return null;
-  const list = words.slice(cursor, cursor + BATCH_SIZE);
+  const extras = getBatchExtras();
+  const slice = cursor < words.length ? words.slice(cursor, cursor + BATCH_SIZE) : [];
+  if (!slice.length && !extras.length) return null;
+  const list = slice.slice();
+  if (extras.length) {
+    const inList = {};
+    list.forEach(function (x) { inList[x.w.toLowerCase()] = true; });
+    extras.forEach(function (x) {
+      if (inList[x.w.toLowerCase()]) return;
+      inList[x.w.toLowerCase()] = true;
+      list.push({ w: x.w, m: x.m, p: x.p });
+    });
+  }
   return {
     batchNo: getRecords().length + 1,
     start: cursor,
-    end: cursor + list.length - 1,
+    end: cursor + slice.length - 1,
     words: list
   };
+}
+
+// 新单词页「添加单词」：加入当前待学批。有待学会话 → 追加进该会话词单；否则记入
+// 手动补充词（教材批出批时合并）。词库/队列已有该词 → 取其 m/p 快照随批学、不入
+// 队列（同拍照灰词规则）；与当前会话/补充词查重命中返回 false。
+function addToCurrentBatch(word) {
+  const acc = currentAccount();
+  if (!word || !word.w) return false;
+  const lw = word.w.toLowerCase();
+  const bank = bankOf(acc.id);
+  const queue = getAccountPhotoWords(acc.id);
+  let src = null;
+  for (var i = 0; i < bank.length; i++) {
+    if (bank[i].w.toLowerCase() === lw) { src = bank[i]; break; }
+  }
+  if (!src) {
+    for (var j = 0; j < queue.length; j++) {
+      if (queue[j].w.toLowerCase() === lw) { src = queue[j]; break; }
+    }
+  }
+  const entry = { w: word.w, m: (src && src.m) || word.m || '', p: (src && src.p) || word.p || '' };
+  const sessions = getPhotoSessions(acc.id);
+  const ses = sessions.find(function (x) { return x.words && x.words.length; });
+  if (ses) {
+    if (ses.words.some(function (x) { return x.w.toLowerCase() === lw; })) return false;
+    ses.words.push(entry);
+    if (!src) {
+      queue.push({ w: entry.w, m: entry.m, p: entry.p, addedAt: Date.now() });
+      wx.setStorageSync(photoWordsKey(acc.id), queue);
+    }
+    wx.setStorageSync(photoSessionsKey(acc.id), sessions);
+    return true;
+  }
+  const extras = getBatchExtras();
+  if (extras.some(function (x) { return x.w.toLowerCase() === lw; })) return false;
+  extras.push(entry);
+  wx.setStorageSync(batchExtrasKey(), extras);
+  if (!src) {
+    queue.push({ w: entry.w, m: entry.m, p: entry.p, addedAt: Date.now() });
+    wx.setStorageSync(photoWordsKey(acc.id), queue);
+  }
+  return true;
 }
 
 // 学习完成后记录：日期 + 内容 + 复习进度
@@ -411,6 +477,8 @@ function saveLearnedBatch(batch) {
     }
   } else {
     setCursor(batch.end + 1); // 静态批推进游标；拍照批不动（R14）
+    // 手动补充词已随本批快照记入，清空防下批重复
+    if (getBatchExtras().length) wx.setStorageSync(batchExtrasKey(), []);
   }
 }
 
@@ -598,8 +666,23 @@ function getOverview() {
   getPhotoSessions(currentAccount().id).forEach(function (s) {
     if (s.words && s.words.length) pushPending(s.words);
   });
+  // 教材待学批：首批与手动补充词合并（与 nextBatch 同口径），库尽但补充词待学时单独成批
   const staticPending = bank.slice(cursor);
-  for (var p = 0; p < staticPending.length; p += BATCH_SIZE) {
+  const extrasOv = getBatchExtras();
+  if (staticPending.length) {
+    const first = staticPending.slice(0, BATCH_SIZE);
+    const inFirst = {};
+    first.forEach(function (x) { inFirst[x.w.toLowerCase()] = true; });
+    extrasOv.forEach(function (x) {
+      if (inFirst[x.w.toLowerCase()]) return;
+      inFirst[x.w.toLowerCase()] = true;
+      first.push({ w: x.w, m: x.m, p: x.p });
+    });
+    pushPending(first);
+  } else if (extrasOv.length) {
+    pushPending(extrasOv.slice());
+  }
+  for (var p = BATCH_SIZE; p < staticPending.length; p += BATCH_SIZE) {
     pushPending(staticPending.slice(p, p + BATCH_SIZE));
   }
   const totalWords = bank.length + getAccountPhotoWords(currentAccount().id).length;
@@ -949,6 +1032,7 @@ module.exports = {
   migratePhotoAccount: migratePhotoAccount,
   getBankEntries: getBankEntries,
   nextBatch: nextBatch,
+  addToCurrentBatch: addToCurrentBatch,
   saveLearnedBatch: saveLearnedBatch,
   getDueBatches: getDueBatches,
   buildReviewSession: buildReviewSession,

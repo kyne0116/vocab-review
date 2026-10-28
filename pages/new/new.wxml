@@ -26,7 +26,9 @@
             <text class="word-phonetic" wx:if="{{item.p}}">{{item.p}}</text>
           </view>
           <text class="word-meaning">{{item.m}}</text>
+          <text class="word-del" catchtap="deleteWord" data-idx="{{index}}">删除</text>
         </view>
+        <view class="add-word" bindtap="addWord">＋ 添加单词</view>
       </view>
     </scroll-view>
 

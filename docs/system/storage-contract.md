@@ -7,6 +7,7 @@
 | `vocab_cursor_<id>` | 教材游标 | 账号 |
 | `vocab_photo_words_<id>` | 拍照词队列 | 账号 |
 | `vocab_photo_sessions_<id>` | 照片会话 | 账号 |
+| `vocab_batch_extras_<id>` | 教材当前批手动补充词（完成学习时清空） | 账号 |
 | `vocab_deleted_<id>` | 静态词软删除集合 | 账号 |
 | `vocab_review_view_<id>` | 复习视图偏好 | 账号 |
 | `vocab_link_cache` | 有道拓展缓存 | 全局 |
