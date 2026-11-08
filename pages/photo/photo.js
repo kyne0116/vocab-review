@@ -13,6 +13,7 @@ Page({
     ohos: false,       // 鸿蒙端（VK 不可用；配置 AI 后仍可识别，仅靠网络）
     imageSrc: '',      // 本次识别的图片（预览用）
     recognizeHint: '正在识别图片中的单词…',
+    engine: '',        // 实际产出结果的识别路线：llm = 智谱 GLM / vk = 微信 VisionKit（候选页标注用）
     candidates: [],    // [{ w, known, checked }]，known=命中内置词库（R04：标灰不可勾选）
     checkedCount: 0,
     glueCount: 0,      // 被过滤的超长粘连串段数（>0 时候选页提示结果可能不完整）
@@ -41,7 +42,7 @@ Page({
       // 保留原图，OCR 层按版面分块压缩；直接使用 compressed 会先损失小字细节
       sizeType: ['original'],
       success: function (res) {
-        that.recognizeImage(res.tempFiles[0].tempFilePath);
+        that.editThenRecognize(res.tempFiles[0].tempFilePath);
       },
       fail: function (err) {
         // 用户取消不提示；权限/隐私问题给引导
@@ -56,11 +57,65 @@ Page({
     });
   },
 
+  /* ---------- 拍照/选图后的处理选择（2026-11-08）：直接识别 / 编辑后识别 / 按比例裁剪 ---------- */
+  // 均用微信官方媒体能力（wx.editImage 基础库 2.22.0+，wx.cropImage 2.26.0+，鸿蒙支持）：
+  // 编辑/裁剪确认后用新图识别（后续 AI 纠错也基于编辑后的图）；菜单或编辑器中取消 = 放弃本张回入口；
+  // 接口不可用/失败时回退原图直接识别，不阻塞主流程
+  editThenRecognize: function (src) {
+    const that = this;
+    wx.showActionSheet({
+      itemList: ['直接识别', '编辑后识别', '按比例裁剪'],
+      success: function (res) {
+        if (res.tapIndex === 0) return that.recognizeImage(src);
+        if (res.tapIndex === 1) {
+          if (!wx.editImage) return that.editFallback(src);
+          wx.editImage({
+            src: src,
+            success: function (r) { that.recognizeImage(r.tempFilePath || src); },
+            fail: function (e) {
+              const msg = (e && e.errMsg) || '';
+              if (msg.indexOf('cancel') !== -1) return; // 取消编辑 = 放弃本张
+              that.editFallback(src, '编辑失败');
+            }
+          });
+          return;
+        }
+        if (!wx.cropImage) return that.editFallback(src);
+        // 裁剪比例按图片方向自适应（4:3 横图 / 3:4 竖图），贴近词表常见版式
+        wx.getImageInfo({
+          src: src,
+          success: function (info) {
+            wx.cropImage({
+              src: src,
+              cropScale: info.width >= info.height ? '4:3' : '3:4',
+              success: function (r) { that.recognizeImage(r.tempFilePath || src); },
+              fail: function (e) {
+                const msg = (e && e.errMsg) || '';
+                if (msg.indexOf('cancel') !== -1) return; // 取消裁剪 = 放弃本张
+                that.editFallback(src, '裁剪失败');
+              }
+            });
+          },
+          fail: function () { that.recognizeImage(src); }
+        });
+      },
+      fail: function () { /* 取消菜单 = 放弃本张，回到入口 */ }
+    });
+  },
+
+  // 当前微信版本无编辑/裁剪能力或接口失败：提示后用原图直接识别
+  editFallback: function (src, prefix) {
+    wx.showToast({ title: (prefix || '当前微信暂不支持编辑') + '，已用原图识别', icon: 'none' });
+    this.recognizeImage(src);
+  },
+
   recognizeImage: function (src) {
     const that = this;
     const requestId = (this._recognizeId || 0) + 1;
     this._recognizeId = requestId;
     const llmOk = llm.configured();
+    // 实际产出结果的识别路线（候选页底部标注用）：vkRun 被执行（降级或纯本机）时改写为 vk
+    let engine = llmOk ? 'llm' : 'vk';
     this.setData({
       stage: 'recognizing', imageSrc: src,
       recognizeHint: llmOk ? 'AI 深度识别中…' : '正在识别图片中的单词…'
@@ -68,6 +123,7 @@ Page({
     // R05-A（2026-10-01）：智谱 GLM 视觉识别为主路线，任何失败（未配置/断网/接口/超时/载荷过大）
     // 自动降级 VisionKit 本地识别；两条路线产出统一走 wordParser 解析与后续流水线。
     const vkRun = function () {
+      engine = 'vk';
       return ocr.recognize(src, function (current, total) {
         if (that._recognizeId !== requestId) return;
         that.setData({ recognizeHint: '正在识别第 ' + current + '/' + total + ' 个区域…' });
@@ -129,7 +185,8 @@ Page({
         candidates: candidates,
         checkedCount: candidates.filter(function (c) { return c.checked; }).length,
         knownCount: candidates.filter(function (c) { return c.known; }).length,
-        glueCount: glue.length
+        glueCount: glue.length,
+        engine: engine
       });
     }).catch(function (err) {
       if (that._recognizeId !== requestId) return;
@@ -427,7 +484,7 @@ Page({
     this.setData({
       stage: 'idle', imageSrc: '', recognizeHint: '正在识别图片中的单词…', candidates: [], checkedCount: 0,
       knownCount: 0, glueCount: 0, progress: { done: 0, total: 0 }, entries: [], okCount: 0,
-      addedCount: 0, grayCount: 0, totalCount: 0
+      addedCount: 0, grayCount: 0, totalCount: 0, engine: ''
     });
   }
 });

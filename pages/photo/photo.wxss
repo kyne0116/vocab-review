@@ -87,6 +87,14 @@
   text-align: center;
 }
 
+/* 候选页底部识别来源标注（2026-11-08，文案经用户确认）：按实际路线显示技术方与照片去向 */
+.engine-tip {
+  text-align: center;
+  font-size: 22rpx;
+  color: #999;
+  margin-top: 20rpx;
+}
+
 .big-num {
   font-size: 72rpx;
   font-weight: bold;

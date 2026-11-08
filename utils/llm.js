@@ -9,7 +9,7 @@
 //   ② correctWord 单词级带图纠错（待补义词「AI 纠错」入口 / 候选页长按）；
 //   ③ AUTO_FIX=true 时查义失败词自动拉取纠错建议（仅展示，用户点「改用它」才生效）。
 
-const DEFAULT_MODEL = 'glm-4v-flash';
+const DEFAULT_MODEL = 'glm-4.6v-flash'; // 2026-11-08 升级（实测可用、免费）；付费旗舰 glm-4.6v 更强但需账户余额
 const DEFAULT_BASE_URL = 'https://open.bigmodel.cn';
 let cfg = { apiKey: '', model: DEFAULT_MODEL, baseUrl: DEFAULT_BASE_URL };
 try { cfg = require('./llm.config.js'); } catch (e) { /* 未创建配置文件：AI 主路线停用，走 VK */ }
@@ -17,14 +17,14 @@ cfg.apiKey = cfg.apiKey || '';
 cfg.model = cfg.model || DEFAULT_MODEL;
 cfg.baseUrl = cfg.baseUrl || DEFAULT_BASE_URL;
 
-const TIMEOUT = 20000;           // 视觉模型首字延迟较高，总时限 20s，超时降级本地识别
+const TIMEOUT = 30000;           // 视觉模型总时限：4.6v-flash 关思考后真机词表图实测 6~18s，30s 留余量，超时降级本地识别
 const MAX_B64 = 6 * 1024 * 1024; // base64 载荷上限（约对应 4.5MB 原图），超出直接降级
 const MAX_SEND_EDGE = 1600;      // 发送前压缩到的长边上限（控制载荷与 token 费用；词表类图片足够）
 const AUTO_FIX = false;          // R06-B 开关（默认关）：查义失败词自动拉取 AI 纠错建议（仅展示，点「改用它」生效）
 
 const PROMPT = [
   '识别图片中所有英文单词（多为课本或练习册词表，部分词前有圈选圈等标记，忽略标记本身）。',
-  '规则：1) 只输出图片中实际存在的英文单词，全部小写；',
+  '规则：1) 图片可能被旋转过，先在心里把图片转正（文字正立可读）再识别；只输出图片中实际存在的英文单词，全部小写，每个单词只输出一次，严格按图中出现顺序输出（多列词表按列从上到下、列间从左到右，有编号按编号顺序）；',
   '2) 教材拼写注记还原为完整拼写，如 dialog(ue)→dialogue、hono(u)r→honor；',
   '3) 不输出中文、句子、数字、标点或解释，不编造图片中不存在的词；',
   '4) 与图片原文不一致（做过注记还原）或拿不准的词，在 note 里说明原图写法或标注「低置信」，其余 note 留空。',
@@ -86,6 +86,22 @@ function fileBase64(path) {
 
 function requestLLM(b64, mime, prompt) {
   return new Promise(function (resolve, reject) {
+    // 4.5V/4.6V 系列默认开思考模式：真实词表图实测思考 35s+（app 必超时降级 VK），
+    // 且思考耗尽 max_tokens 致正文为空；关思考后 6~18s 直出、识别质量不降
+    //（2026-11-08 真实检测表照片实测）。glm-4v-flash 等旧模型无此参数，不发。
+    const body = {
+      model: cfg.model,
+      temperature: 0.1,
+      max_tokens: 1000,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: 'data:image/' + mime + ';base64,' + b64 } },
+          { type: 'text', text: prompt }
+        ]
+      }]
+    };
+    if (/glm-4\.[56]v/.test(cfg.model)) body.thinking = { type: 'disabled' };
     wx.request({
       url: cfg.baseUrl + '/api/paas/v4/chat/completions',
       method: 'POST',
@@ -94,18 +110,7 @@ function requestLLM(b64, mime, prompt) {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + cfg.apiKey
       },
-      data: {
-        model: cfg.model,
-        temperature: 0.1,
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: 'data:image/' + mime + ';base64,' + b64 } },
-            { type: 'text', text: prompt }
-          ]
-        }]
-      },
+      data: body,
       success: function (res) {
         if (res.statusCode !== 200) {
           return reject(errOf('LLM_HTTP_' + res.statusCode, 'AI 接口返回 ' + res.statusCode + '（'

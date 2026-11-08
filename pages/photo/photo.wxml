@@ -54,6 +54,7 @@
     </view>
     <button class="btn-primary act-btn" bindtap="lookupMeanings">查询释义（{{checkedCount}} 词）</button>
     <button class="btn-plain act-btn" bindtap="again">重新拍照</button>
+    <view class="engine-tip">{{engine === 'vk' ? '本机识别 · 微信 VisionKit · 照片未离开手机' : 'AI 识别 · 智谱 GLM 视觉大模型 · 照片已上传云端'}}</view>
   </block>
 
   <!-- 查义进度 -->
