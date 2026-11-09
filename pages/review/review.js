@@ -97,6 +97,7 @@ Page({
       return;
     }
     const session = store.buildBatchReviewSession(batchId);
+    this.session = session;
     if (session.items.length === 0) {
       // 第4轮起只复习遗忘池，池为空则无需复习
       this.setData({ state: 'manualEmpty' });

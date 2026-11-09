@@ -9,3 +9,5 @@
 | 词典与声音 | `utils/lookup.js`、`utils/tts.js` | 查义、拓展、朗读 |
 | 静态数据 | `data/accounts.js`、`data/primary.js`、`data/junior.js` | 账号和教材 |
 | 逻辑测试 | `test/test-logic.js` | Node 可运行的行为测试 |
+
+页面文件约束：`app.json` 注册的每个页面须同时具备同名 `.js`、`.wxml`、`.json`（`.json` 按惯例设置 `navigationBarTitleText`）。缺 `.json` 时开发者工具报「页面 json 文件缺失 … 无法注册为页面」（2026-11-09，工具 2.02.2609250 实测）。

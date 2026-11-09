@@ -85,6 +85,10 @@ Page({
       this.checkPetUp();
     }
   },
+  // 头部卡「切换账号 ▸」只负责滚动到家庭榜，切换仍由家庭榜行点按完成（R18）
+  goFamily: function () {
+    wx.pageScrollTo({ selector: '.family-card', duration: 300 });
+  },
 
   /* ---------- R12 宠物养成 ---------- */
   // 进化检测：与上次看到的档位（vocab_pet_stage_<accountId>）比较，升档弹庆祝，降档（删词等）静默对齐

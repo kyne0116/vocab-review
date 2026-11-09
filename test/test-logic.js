@@ -13,11 +13,14 @@ class FakeDate extends RealDate {
 FakeDate.now = function () { return fakeNow !== null ? fakeNow : RealDate.now(); };
 global.Date = FakeDate;
 
-// 模拟微信本地存储
+// 模拟微信本地存储：同真机，写入即序列化、每次读出新副本、缺键返回 ''。
+// 若按引用存取，「改了读出的对象却没写回」的缺陷在测试里会被掩盖。
 const storage = {};
+const copy = (v) => JSON.parse(JSON.stringify(v));
 global.wx = {
-  setStorageSync: (k, v) => { storage[k] = v; },
-  getStorageSync: (k) => storage[k] || ''
+  setStorageSync: (k, v) => { storage[k] = copy(v); },
+  getStorageSync: (k) => (Object.prototype.hasOwnProperty.call(storage, k) ? copy(storage[k]) : ''),
+  removeStorageSync: (k) => { delete storage[k]; }
 };
 
 const path = require('path');
@@ -671,7 +674,7 @@ storage.vocab_link_cache = { happy: l18h };
 const calls18before = calls13.length;
 lk.lookupLinks('happy').then(function (r) {
   eq(r.ok && r.cached, true, '拓展缓存命中');
-  eq(r.links === l18h, true, '命中返回缓存对象');
+  eq(r.links, l18h, '命中返回缓存内容');
   eq(calls13.length, calls18before, '缓存命中不发请求');
 });
 
@@ -1052,5 +1055,100 @@ eq(b26e.start - b26e.end, 1, '空切片区间（start = end + 1）');
 store.saveLearnedBatch(b26e);
 eq(storage.vocab_cursor_junior, store.currentBank().length, '完成学习游标不动');
 eq(store.nextBatch(), null, 'extras 清空后回到 null');
+
+// ---- 场景27：两账号来回切换的数据隔离与一键初始化（resetAccountProgress，2026-11-09） ----
+// 账号级键按「vocab_ 前缀 + _<账号id> 后缀」取全集：新增账号级键而漏进初始化清单时同样会失败
+function accKeys27(id) {
+  const o = {};
+  Object.keys(storage).sort().forEach(function (k) {
+    if (k.indexOf('vocab_') === 0 && k.slice(-(id.length + 1)) === '_' + id) o[k] = storage[k];
+  });
+  return JSON.stringify(o);
+}
+function exceptPointer27() {
+  const o = {};
+  Object.keys(storage).sort().forEach(function (k) { if (k !== 'vocab_account') o[k] = storage[k]; });
+  return JSON.stringify(o);
+}
+['junior', 'primary'].forEach(function (id) {
+  Object.keys(storage).forEach(function (k) { if (k.slice(-(id.length + 1)) === '_' + id) delete storage[k]; });
+});
+store.switchAccount('junior');
+setDay(2027, 7, 1);
+
+// 27a 初中：学一批、改视图偏好、删一个已学词、手动补词、拍照收词
+const jBank27 = store.currentBank().slice();
+const jb27 = store.nextBatch();
+store.saveLearnedBatch(jb27);
+store.setReviewView('list');
+eq(store.removeWords([jb27.words[0].w]), { removed: 1, learned: 1 }, '初中删1个已学词');
+eq(store.addToCurrentBatch({ w: 'exj', m: 'n. 初中补充' }), true, '初中手动补充词');
+eq(store.savePhotoSession([{ w: 'phj1', m: 'n. 初中拍照1' }, { w: 'phj2', m: 'n. 初中拍照2' }]).added, 2, '初中拍照收2词');
+const J27 = accKeys27('junior');
+
+// 27b 切到小学：看不到初中的任何数据，初中存储不被改动
+eq(store.switchAccount('primary'), true, '切到小学');
+eq(store.getRecords().length, 0, '小学无学习记录');
+const pb27 = store.nextBatch();
+eq([pb27.batchNo, pb27.start, pb27.words[0].w, !!pb27.photo], [1, 0, store.currentAccount().bank[0].w, false], '小学从自己词库第1批第1词开始');
+eq(pb27.words.some(x => ['exj', 'phj1', 'phj2'].indexOf(x.w) !== -1), false, '小学批次不含初中补充词/拍照词');
+eq(store.getReviewView(), 'card', '小学不继承初中的视图偏好');
+eq(store.getStats().totalWords, store.currentAccount().bank.length, '小学词库总量不含初中拍照词');
+eq(store.inCurrentBank('phj1'), false, '初中拍照词不算小学已收录');
+eq(store.getWrongWords().length, 0, '小学错词本为空');
+eq(accKeys27('junior'), J27, '切换并读取小学后，初中存储不变');
+
+// 27c 小学：学习、复习忘3词、删1个未学词、拍照收1词 → 只写小学的键
+store.saveLearnedBatch(pb27);
+setDay(2027, 7, 2);
+const ps27 = store.buildReviewSession();
+const pf27 = {};
+ps27.items.slice(0, 3).forEach(function (it) { pf27[it.word] = true; });
+store.finishReview(ps27, pf27);
+eq(store.getWrongWords().length, 3, '小学错词本3词');
+eq(store.removeWords([store.currentBank()[100].w]), { removed: 1, learned: 0 }, '小学删1个未学词');
+eq(store.savePhotoSession([{ w: 'php1', m: 'n. 小学拍照1' }]).added, 1, '小学拍照收1词');
+eq(accKeys27('junior'), J27, '小学的学习/复习/删词/收词不改初中存储');
+const P27 = accKeys27('primary');
+
+// 27d 切回初中：数据原样恢复
+store.switchAccount('junior');
+eq([store.getRecords().length, store.getRecords()[0].words.length], [1, 34], '初中仍为1批、删词后34词');
+eq(store.getReviewView(), 'list', '初中视图偏好仍为列表');
+eq(store.getWrongWords().length, 0, '初中错词本不含小学错词');
+eq(store.getStats().totalWords, jBank27.length - 1 + 3, '初中词库总量 = 有效库 + 自己的拍照队列');
+const jn27 = store.nextBatch();
+eq([!!jn27.photo, jn27.words.map(x => x.w)], [true, ['phj1', 'phj2']], '初中优先出自己的拍照批');
+eq(accKeys27('primary'), P27, '切回初中后，小学存储不变');
+
+// 27e 家庭榜与各账号统计一致；来回切换（含首页同款读取）除当前账号指针外零写入
+const fam27 = store.getAccountsOverview();
+eq(fam27.find(f => f.id === 'junior').learned, store.getStats().learned, '家庭榜初中已学 = 初中统计');
+store.switchAccount('primary');
+eq(fam27.find(f => f.id === 'primary').learned, store.getStats().learned, '家庭榜小学已学 = 小学统计');
+const before27 = exceptPointer27();
+for (let i = 0; i < 20; i++) {
+  store.switchAccount(i % 2 ? 'primary' : 'junior');
+  store.getStats(); store.getOverview(); store.nextBatch(); store.getPetInfo(); store.getAccountsOverview();
+}
+eq(exceptPointer27(), before27, '来回切换20次后存储零变化（仅当前账号指针改变）');
+eq([store.switchAccount('nobody'), store.currentAccount().id], [false, 'primary'], '未知账号 id 被拒，当前账号不变');
+
+// 27f 一键初始化：只清当前账号的全部账号级键（含首页写入的宠物档位），另一账号与全局键不动
+store.switchAccount('junior');
+storage.vocab_pet_stage_junior = 1; // 首页 checkPetUp 写入的档位
+storage.vocab_pet_stage_primary = 1;
+const all27 = exceptPointer27();
+eq(store.resetAccountProgress('nobody'), false, '未知账号初始化被拒');
+eq(exceptPointer27(), all27, '被拒时不删任何键');
+const P27b = accKeys27('primary');
+const migrated27 = storage.vocab_photo_migrated;
+eq(store.resetAccountProgress('junior'), true, '初始化初中');
+eq(accKeys27('junior'), '{}', '初中账号级键全部清空');
+eq(accKeys27('primary'), P27b, '小学数据不受影响');
+eq([storage.vocab_photo_migrated, store.currentAccount().id], [migrated27, 'junior'], '迁移标记与当前账号保留');
+const jr27 = store.nextBatch();
+eq([jr27.batchNo, jr27.start, jr27.words[0].w, !!jr27.photo], [1, 0, jBank27[0].w, false], '初中回到第1批第1词（已删词恢复）');
+eq([store.getStats().learned, store.getReviewView(), store.getWrongWords().length], [0, 'card', 0], '初中统计、偏好、错词本回到初始');
 
 
