@@ -3,7 +3,7 @@
   <block wx:if="{{state === 'quiz'}}">
     <view class="card spell-card {{wrongFlash ? 'flash-no' : ''}} {{okFlash ? 'flash-ok' : ''}}">
       <view class="spell-progress text-muted">{{done}} / {{total}} 已拼对 · 错词自动回队重拼</view>
-      <view class="spell-meaning">{{word.m}}</view>
+      <view class="spell-meaning" bindtap="readMeaning">{{word.m}}</view>
       <view class="spell-hint" bindtap="hint">🔊 听音提示</view>
 
       <view class="spell-slots {{wrongFlash ? 'shake' : ''}}">
@@ -28,7 +28,8 @@
       <view class="done-row">拼对单词：{{total}} 个</view>
       <view class="done-row ok">一次拼对：{{accuracy}}%</view>
       <view class="done-row">打字速度：{{speed}} 字母/分</view>
-      <view class="done-note text-muted">错过的词已在刚才的重拼中巩固过一遍</view>
+      <view class="done-note text-muted" wx:if="{{markedCount > 0}}">拼错的 {{markedCount}} 词已在重拼中巩固，并记入错词本（复习连续答对 2 次自动移出）</view>
+      <view class="done-note text-muted" wx:else>全部一次拼对，无错词 🎉</view>
       <button class="btn-primary done-btn" bindtap="again">再来一遍</button>
       <button class="btn-plain done-btn" bindtap="goBack">返回</button>
     </view>

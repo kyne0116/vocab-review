@@ -4,7 +4,7 @@
   <view wx:if="{{items.length === 0}}" class="card empty">
     <view class="empty-icon">🎉</view>
     <view>错词本还是空的</view>
-    <view class="text-muted" style="margin-top:12rpx;">复习时答错的单词会收录到这里，答对后自动移出</view>
+    <view class="text-muted" style="margin-top:12rpx;">正式复习答错、快测标忘或默写拼错的词会收录到这里；复习连续答对 2 次、自由复习答对或点「我会了」后移出</view>
   </view>
 
   <!-- 错词列表 -->

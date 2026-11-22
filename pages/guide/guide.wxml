@@ -6,5 +6,5 @@
   <view class="step card"><text class="step-icon">✍️</text><view><view class="step-title">4. 用默写加强回忆</view><view class="step-text">学习模式中可进入“默写模式”，看中文拼写英文。刚学完也可做“当日快测”，它只用于当天巩固，不改变正式复习进度。</view></view></view>
   <view class="step card"><text class="step-icon">📷</text><view><view class="step-title">5. 需要时拍照收词</view><view class="step-text">拍课本或练习册，检查识别出的英文、修改错误拼写，再确认释义后收录。网络不可用时会尝试本机识别。</view></view></view>
   <view class="step card"><text class="step-icon">🐣</text><view><view class="step-title">6. 看懂学习反馈</view><view class="step-text">“已学”表示进入过学习记录，“复习中”表示尚未完成 10 轮，“已掌握”表示完成 10 轮且当前没有遗忘词。错词本和教材总览告诉你下一步该巩固什么。</view></view></view>
-  <view class="reset-tip">想从头开始？回到首页底部点击“一键初始化”。</view>
+  <view class="reset-tip">想从头开始？回到首页底部点击“一键初始化”。v1.0.3</view>
 </view>

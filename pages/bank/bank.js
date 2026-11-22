@@ -41,6 +41,7 @@ Page({
         learned: x.learned,
         done: x.done,
         photo: !!x.photo,
+        manual: !!x.manual,
         statusText: x.learned ? ('第' + x.batchNo + '批·' + (x.done ? '已完成' : '复习中')) : '待学习',
         sel: !!sel[x.w]
       };

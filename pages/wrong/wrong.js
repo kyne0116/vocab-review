@@ -28,12 +28,20 @@ Page({
     tts.speakPair(it.word, it.meaning, 1, 1200);
   },
 
-  // 我已会：从错词本移出
+  // 我已会：确认后从错词本移出（R22：加确认防连点误删——移出不经任何验证）
   onKnow: function (e) {
     const it = this.data.items[e.currentTarget.dataset.idx];
     if (!it) return;
-    store.removeWrongWord(it.word);
-    wx.showToast({ title: '已移出错词本', icon: 'none' });
-    this.refresh();
+    const that = this;
+    wx.showModal({
+      title: '移出「' + it.word + '」？',
+      content: '确认已掌握，从错词本移出（不再验证）。',
+      success: function (res) {
+        if (!res.confirm) return;
+        store.removeWrongWord(it.word);
+        wx.showToast({ title: '已移出错词本', icon: 'none' });
+        that.refresh();
+      }
+    });
   }
 });

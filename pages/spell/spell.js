@@ -15,6 +15,7 @@ Page({
     total: 0,           // 总词数
     done: 0,            // 已拼对（按词去重）
     firstPass: 0,       // 一次拼对词数
+    markedCount: 0,     // R22：本轮拼错过（已记入错词本）的词数
     letters: 0,         // 正确敲入字母数（速度统计）
     startedAt: 0,       // 首次输入时间戳
     wrongFlash: false,
@@ -71,6 +72,12 @@ Page({
     });
     const that = this;
     setTimeout(function () { that.setData({ inputFocus: true }); }, 60); // 切词后重新挂起键盘
+    // 出词即读：自动报读中文释义提示（取首个义项，同报读口径）。
+    // 延迟 900ms 是为让上一词拼对时的英文强化朗读先播完（600ms 切词 + 900ms
+    // ≈ tts 英文窗口 1500ms），不被中文提示顶掉；拼错重拼同一词不重读。
+    if (this.zhTimer) clearTimeout(this.zhTimer);
+    const zh = tts.briefText(word.m);
+    this.zhTimer = setTimeout(function () { tts.speak(zh, 'zh_CN'); }, 900);
   },
 
   // 输入比对：前缀逐字符对则点亮槽位；任一位错（或超长）= 整词重打
@@ -97,6 +104,7 @@ Page({
   },
 
   pass: function () {
+    if (this.zhTimer) { clearTimeout(this.zhTimer); this.zhTimer = null; } // 快速拼对时取消排队的中文提示，先保英文强化音
     const word = this.data.word;
     const target = word.w;
     const grown = target.length - this.data.inputValue.length;
@@ -141,17 +149,34 @@ Page({
 
   finish: function () {
     const mins = this.data.startedAt ? (Date.now() - this.data.startedAt) / 60000 : 0;
+    // R22：拼错过的词（整词重打过的）随本轮结束记入该批遗忘池（进错词本，幂等）；
+    // 不推进复习轮次，解除走错词本统一出口
+    const wrongs = Object.keys(this.errorMap || {});
+    if (wrongs.length) store.markBatchWordsForgot(this.data.batch.batchId, wrongs);
     this.setData({
       state: 'done',
       speed: mins > 0.02 ? Math.round(this.data.letters / mins) : this.data.letters,
-      accuracy: this.data.total ? Math.round(this.data.firstPass / this.data.total * 100) : 0
+      accuracy: this.data.total ? Math.round(this.data.firstPass / this.data.total * 100) : 0,
+      markedCount: wrongs.length
     });
   },
 
   // 听音提示：不想看中文猜的可以听读音（也给拼不出的孩子一个台阶）
   hint: function () {
-    if (this.data.word) tts.speak(this.data.word.w, 'en_US');
+    if (!this.data.word) return;
+    if (this.zhTimer) { clearTimeout(this.zhTimer); this.zhTimer = null; } // 用户主动要听英文，取消排队的中文提示
+    tts.speak(this.data.word.w, 'en_US');
+  },
+
+  // 点击中文释义：再读一遍提示（出词自动读的重听入口）
+  readMeaning: function () {
+    if (!this.data.word) return;
+    if (this.zhTimer) { clearTimeout(this.zhTimer); this.zhTimer = null; }
+    tts.speak(tts.briefText(this.data.word.m), 'zh_CN');
   },
   goBack: function () { wx.navigateBack(); },
-  onUnload: function () { tts.stopSpoken(); }
+  onUnload: function () {
+    if (this.zhTimer) { clearTimeout(this.zhTimer); this.zhTimer = null; } // 防离页后中文提示仍触发
+    tts.stopSpoken();
+  }
 });

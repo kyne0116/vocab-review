@@ -34,6 +34,17 @@
   justify-content: space-between;
   margin-top: 16rpx;
 }
+.head-name-wrap { display: flex; align-items: center; min-width: 0; }
+.head-account-tag {
+  flex-shrink: 0;
+  margin-right: 12rpx;
+  background: #eefaf2;
+  color: #07c160;
+  font-size: 22rpx;
+  font-weight: 600;
+  padding: 6rpx 18rpx;
+  border-radius: 24rpx;
+}
 .head-name { font-size: 40rpx; font-weight: bold; }
 .head-streak {
   flex-shrink: 0;

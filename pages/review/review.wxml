@@ -31,7 +31,7 @@
         <text class="v">已全部安排完 🎉</text>
       </view>
       <view class="hr"></view>
-      <view class="board-note text-muted">复习节点：学后第 1、2、3、4、6、8、11、13、16、21 天</view>
+      <view class="board-note text-muted">复习节点：学后第 1、2、3、4、6、8、11、13、16、21 天；完成后仍有错词的批每 7 天巩固一轮</view>
     </view>
 
     <!-- R21-D：未来 7 天排期条（复习中心）——无任务的日子也占格，逾期累积到当天 -->
@@ -74,7 +74,7 @@
         <text>日</text><text>一</text><text>二</text><text>三</text><text>四</text><text>五</text><text>六</text>
       </view>
       <view class="cal-grid">
-        <view class="cal-cell {{c.cls}}" wx:for="{{calCells}}" wx:key="index">
+        <view class="cal-cell {{c.cls}}" wx:for="{{calCells}}" wx:for-item="c" wx:key="index">
           <text wx:if="{{c.d}}">{{c.d}}</text>
         </view>
       </view>
@@ -142,8 +142,8 @@
       </view>
       <view class="progress-text text-muted">
         <block wx:if="{{mode === 'free'}}">{{index + 1}} / {{items.length}} · 错词本自由复习 · 答对自动移出</block>
-        <block wx:elif="{{mode === 'study'}}">{{index + 1}} / {{items.length}} · 第 {{current.batchNo}} 批 · 当日快测 · 忘记的词会再来一遍</block>
-        <block wx:else>{{index + 1}} / {{items.length}} · 第 {{current.batchNo}} 批 · 第 {{roundOf(current.batchNo)}} 次复习</block>
+        <block wx:elif="{{mode === 'study'}}">{{index + 1}} / {{items.length}} · 第 {{current.batchNo}} 批 · 当日快测 · 忘记的词会再来一遍并记入错词本</block>
+        <block wx:else>{{index + 1}} / {{items.length}} · 第 {{current.batchNo}} 批 · {{roundOf(current.batchNo)}}</block>
       </view>
 
       <view class="card quiz-card {{feedback === 'ok' ? 'fb-ok' : ''}} {{feedback === 'no' ? 'fb-no' : ''}}">
@@ -169,7 +169,7 @@
     <block wx:else>
       <view class="progress-text text-muted">
         <block wx:if="{{mode === 'free'}}">错词本自由复习 · 答对自动移出</block>
-        <block wx:elif="{{mode === 'manual'}}">第 {{items[0].batchNo}} 批 · 第 {{roundOf(items[0].batchNo)}} 次复习</block>
+        <block wx:elif="{{mode === 'manual'}}">第 {{items[0].batchNo}} 批 · {{roundOf(items[0].batchNo)}}</block>
         <block wx:else>今日到期复习</block>
         · 共 {{items.length}} 词 · 已看 {{revealedCount}} · 忘记 {{forgotCount}}
       </view>
@@ -203,13 +203,15 @@
         <view class="result-row">本批单词：{{studyTotal}} 个</view>
         <view class="result-row remember">一次记得：{{firstPass}} 个</view>
         <view class="result-row forget" wx:if="{{studyTotal - firstPass > 0}}">多记一遍才记住：{{studyTotal - firstPass}} 个</view>
-        <view class="result-note text-muted">快测只作当天巩固，不计入复习进度；忘记的词明天第 1 次复习还会再见面</view>
+        <view class="result-note text-muted" wx:if="{{studyMarked > 0}}">快测不计入复习轮次；标忘的 {{studyMarked}} 词已记入错词本，复习连续答对 2 次自动移出</view>
+        <view class="result-note text-muted" wx:else>快测不计入复习轮次；本批全部一次记住 🎉</view>
       </block>
       <block wx:else>
         <view class="result-row">复习单词：{{items.length}} 个</view>
         <view class="result-row remember">记得：{{remembered}} 个</view>
         <view class="result-row forget">忘记：{{forgot}} 个</view>
-        <view class="result-note text-muted" wx:if="{{mode === 'free'}}">答对的词已自动移出错词本；忘记的词保留待巩固</view>
+        <view class="result-row" wx:if="{{removedWrong > 0}}">已移出错词本：{{removedWrong}} 词</view>
+        <view class="result-note text-muted" wx:if="{{mode === 'free'}}">已移出错词本 {{removedWrong}} 词；忘记的词保留待巩固</view>
         <view class="result-note text-muted" wx:else>涉及批次：{{batchNos}}</view>
       </block>
     </view>

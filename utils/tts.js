@@ -13,7 +13,7 @@
 // ★ 发音配置：英文朗读声线（有道 dictvoice 接口）
 //   type=2 → 美式发音   type=1 → 英式发音
 // 想切换口味只改这一行即可，全应用（点词、连播、学习模式）同步生效
-const EN_VOICE_TYPE = 2; // 2=美式  1=英式
+const EN_VOICE_TYPE = 1; // 2=美式  1=英式
 
 let audio = null;    // 内部音频播放器
 let timers = [];     // 连读报读的定时器句柄

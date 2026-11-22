@@ -5,6 +5,7 @@ const ACCOUNTS = require('../data/accounts.js');
 const BATCH_SIZE = 35;                              // 每批新单词数量
 const OFFSETS = [1, 2, 3, 4, 6, 8, 11, 13, 16, 21]; // 10次复习所在天（学习日为第0天）
 const FULL_REVIEW_ROUNDS = 3;                       // 前3次复习全部内容，后7次复习遗忘词
+const CONSOLIDATE_INTERVAL_DAYS = 7;                // R22：十轮完成后池非空的批，隔这么多天再考一轮遗忘池
 
 const KEY_ACCOUNT = 'vocab_account';                // 当前账号id
 // R14：拍照生词并入当前账号，原独立 photo 账号退役。以下为迁移源键（旧 photo 账号
@@ -68,10 +69,12 @@ function getPhotoSessions(id) {
   return init;
 }
 
-// R15：收录一次拍照 = 建立一个「拍照会话」。list = [{ w, gray?, m?, p? }]（候选页出现顺序）：
-// 新词（gray 空）与有效库/队列去重后入队列并进会话；灰词不入队列、不重复收录，词义音标
-// 从当前账号词库/队列取快照（不耗查义额度）。返回 { added, gray, total }，total=0 = 无可收录。
-function savePhotoSession(list) {
+// R15：收录一次拍照 = 建立一个「拍照会话」。list = [{ w, gray?, m?, p? }]（候选页出现顺序，
+// 只含用户勾选的词——未勾选的已收录词由页面过滤、不进会话）：新词（gray 空）与有效库/队列
+// 去重后入队列并进会话；灰词不入队列、不重复收录，词义音标从当前账号词库/队列取快照
+// （不耗查义额度）。manual=true 为手动录入会话：会话与新入队词条带 manual 标（页面标注
+// 来源用）。返回 { added, gray, total }，total=0 = 无可收录。
+function savePhotoSession(list, manual) {
   const acc = currentAccount();
   const bank = bankOf(acc.id);
   const queue = getAccountPhotoWords(acc.id);
@@ -99,13 +102,17 @@ function savePhotoSession(list) {
     }
     if (seen[lw]) return;
     seen[lw] = true;
-    added.push({ w: it.w, m: it.m || '', p: it.p || '', addedAt: Date.now() });
+    const item = { w: it.w, m: it.m || '', p: it.p || '', addedAt: Date.now() };
+    if (manual) item.manual = true;
+    added.push(item);
     words.push({ w: it.w, m: it.m || '', p: it.p || '' });
   });
   if (added.length) wx.setStorageSync(photoWordsKey(acc.id), queue.concat(added));
   if (!words.length) return { added: 0, gray: 0, total: 0 };
   const sessions = getPhotoSessions(acc.id);
-  sessions.push({ id: 's' + Date.now() + '-' + sessions.length, createdAt: Date.now(), words: words });
+  const session = { id: 's' + Date.now() + '-' + sessions.length, createdAt: Date.now(), words: words };
+  if (manual) session.manual = true;
+  sessions.push(session);
   wx.setStorageSync(photoSessionsKey(acc.id), sessions);
   return { added: added.length, gray: gray, total: words.length };
 }
@@ -223,7 +230,8 @@ function getBankEntries() {
       learned: !!st,
       batchNo: st ? st.batchNo : 0,
       done: st ? st.done : false,
-      photo: true
+      photo: true,
+      manual: !!x.manual // 手动录入来源（词库页打「手动」标，缺省为拍照）
     };
   }));
 }
@@ -276,7 +284,7 @@ function removeWords(words) {
   sessions.forEach(function (s) {
     const ws = (s.words || []).filter(function (x) { return !set[x.w]; });
     if (ws.length !== (s.words || []).length) sesChanged = true;
-    if (ws.length) keptSessions.push({ id: s.id, createdAt: s.createdAt, words: ws });
+    if (ws.length) keptSessions.push(Object.assign({}, s, { words: ws })); // 保留 manual 等会话字段
   });
   if (sesChanged) wx.setStorageSync(photoSessionsKey(acc.id), keptSessions);
   // 手动补充词同步清理（新单词页加的词被删）
@@ -378,13 +386,15 @@ function getBatchExtras() {
 function nextBatch() {
   const ses = getPhotoSessions(currentAccount().id).find(function (s) { return s.words && s.words.length; });
   if (ses) {
-    return {
+    const sesBatch = {
       batchNo: getRecords().length + 1,
       start: -1, end: -1, // 拍照批不占静态游标
       words: ses.words,
       photo: true,
       sessionId: ses.id
     };
+    if (ses.manual) sesBatch.manual = true; // 手动录入会话：页面批次头按来源标注
+    return sesBatch;
   }
   const words = currentBank();
   const cursor = getCursor();
@@ -434,7 +444,7 @@ function addToCurrentBatch(word) {
     if (ses.words.some(function (x) { return x.w.toLowerCase() === lw; })) return false;
     ses.words.push(entry);
     if (!src) {
-      queue.push({ w: entry.w, m: entry.m, p: entry.p, addedAt: Date.now() });
+      queue.push({ w: entry.w, m: entry.m, p: entry.p, addedAt: Date.now(), manual: true });
       wx.setStorageSync(photoWordsKey(acc.id), queue);
     }
     wx.setStorageSync(photoSessionsKey(acc.id), sessions);
@@ -445,7 +455,7 @@ function addToCurrentBatch(word) {
   extras.push(entry);
   wx.setStorageSync(batchExtrasKey(), extras);
   if (!src) {
-    queue.push({ w: entry.w, m: entry.m, p: entry.p, addedAt: Date.now() });
+    queue.push({ w: entry.w, m: entry.m, p: entry.p, addedAt: Date.now(), manual: true });
     wx.setStorageSync(photoWordsKey(acc.id), queue);
   }
   return true;
@@ -483,14 +493,23 @@ function saveLearnedBatch(batch) {
 }
 
 /* ---------- 复习调度 ---------- */
+// 巩固轮基准日：该批最近一次复习日期（reviewHistory 末条）；无历史时防御性回退学习日
+function lastReviewDate(rec) {
+  const hs = rec.reviewHistory || [];
+  return hs.length ? hs[hs.length - 1].date : rec.date;
+}
+
 // 今天到期的批次（含逾期补做）
 function getDueBatches() {
   const today = todayStr();
   return getRecords().filter(function (r) {
     // R09：整批词条被删除后（words 与遗忘池皆空）不再产生到期任务
     if (r.words.length === 0 && r.wrongPool.length === 0) return false;
-    return r.reviewsDone < OFFSETS.length &&
-      diffDays(r.date, today) >= OFFSETS[r.reviewsDone];
+    if (r.reviewsDone < OFFSETS.length) {
+      return diffDays(r.date, today) >= OFFSETS[r.reviewsDone];
+    }
+    // R22：十轮完成后池非空 → 巩固循环，距最近一次复习满间隔天再考一轮遗忘池
+    return r.wrongPool.length > 0 && diffDays(lastReviewDate(r), today) >= CONSOLIDATE_INTERVAL_DAYS;
   });
 }
 
@@ -511,14 +530,18 @@ function buildReviewSession() {
   return { due: due, items: items };
 }
 
-// 完成复习：forgotMap = { 单词: true(忘记) }
+// 完成复习：forgotMap = { 单词: true(忘记) }；返回本次实际移出遗忘池（=错词本）的
+// 词数（跨批按词去重、只计移出不计新入——R22 结果页如实展示用）
 function finishReview(session, forgotMap) {
   const rs = getRecords();
+  const removedSet = {};
   session.due.forEach(function (due) {
     const rec = rs.find(function (x) { return x.batchId === due.batchId; });
     if (!rec) return;
-    const round = rec.reviewsDone; // 本次是第 round+1 次复习
+    const round = rec.reviewsDone; // 本次是第 round+1 次复习（>10 为 R22 巩固轮）
     rec.correctStreak = rec.correctStreak || {};
+    const before = {};
+    rec.wrongPool.forEach(function (x) { before[x.w] = true; });
     let source;
     if (round < FULL_REVIEW_ROUNDS) {
       source = rec.words;
@@ -537,17 +560,15 @@ function finishReview(session, forgotMap) {
       });
     } else {
       source = rec.wrongPool;
-      // 遗忘词复习轮：答对移出遗忘池，答错保留
-      rec.correctStreak = rec.correctStreak || {};
+      // 遗忘词复习轮（含巩固轮）：答对移出遗忘池，答错保留
       rec.wrongPool = rec.wrongPool.filter(function (w) {
         if (forgotMap[w.w]) { rec.correctStreak[w.w] = 0; return true; }
         rec.correctStreak[w.w] = (rec.correctStreak[w.w] || 0) + 1;
         return rec.correctStreak[w.w] < 2;
       });
-      source.forEach(function (w) {
-        if (forgotMap[w.w]) rec.correctStreak[w.w] = 0;
-      });
     }
+    rec.wrongPool.forEach(function (x) { delete before[x.w]; });
+    Object.keys(before).forEach(function (w) { removedSet[w] = true; });
     const total = source.length;
     const wrongList = source.filter(function (w) { return !!forgotMap[w.w]; });
     // R21：逐词记录忘记词（forgot 数组）——批次正确率口径之外提供词级历史，
@@ -559,6 +580,7 @@ function finishReview(session, forgotMap) {
     rec.reviewsDone = round + 1;
   });
   saveRecords(rs);
+  return Object.keys(removedSet).length;
 }
 
 /* ---------- 指定批次复习（教程进度页手动点选某一批，不依赖到期调度） ---------- */
@@ -606,6 +628,32 @@ function removeWrongWord(word) {
   });
   if (removed > 0) saveRecords(rs);
   return removed;
+}
+
+// R22：初学「未掌握」登记（当日快测标忘 / 默写拼错）：把指定词记入该批遗忘池，
+// 即刻进错词本。幂等：已在池中的词只重置连对计数、不重复入池（重测答对不撤回，
+// 解除走错词本统一出口）。words 可传字符串或 { w } 词条。返回本次新入池词数。
+function markBatchWordsForgot(batchId, words) {
+  const set = {};
+  (words || []).forEach(function (x) {
+    const w = typeof x === 'string' ? x : (x && x.w);
+    if (w) set[w] = true;
+  });
+  const rs = getRecords();
+  const rec = rs.find(function (r) { return r.batchId === batchId; });
+  if (!rec || !Object.keys(set).length) return 0;
+  rec.correctStreak = rec.correctStreak || {};
+  let added = 0;
+  rec.words.forEach(function (w) {
+    if (!set[w.w]) return;
+    rec.correctStreak[w.w] = 0; // 新的未掌握信号：连对清零（无论是否已在池中）
+    if (!rec.wrongPool.some(function (x) { return x.w === w.w; })) {
+      rec.wrongPool.push(w);
+      added++;
+    }
+  });
+  if (added) saveRecords(rs);
+  return added;
 }
 
 // R15：一词可属多批（拍照批含已收录灰词），已学词数按词去重统计（防宠物/家庭榜虚增）
@@ -696,21 +744,23 @@ function getOverview() {
   };
 }
 
-// 移除逐词"我会了"之外，还支持自由复习：答对的词从错词本移出（不推进任何复习次数）
-// session 来自 buildFreeReviewSession()，forgotMap = { 单词: true(忘记) }
+// 移除逐词"我会了"之外，还支持自由复习：答对的词从错词本移出（不推进任何复习次数，
+// 答对 1 次即信任移出——主动自测口径，见 review.md）。session 来自
+// buildFreeReviewSession()，forgotMap = { 单词: true(忘记) }；返回本次实际移出词数
 function finishFreeReview(session, forgotMap) {
   const rs = getRecords();
-  let changed = false;
+  const removedSet = {};
   (session.items || []).forEach(function (it) {
     if (forgotMap[it.word]) return; // 忘记：留在错词本等待后续正式复习
     // 记得：从所有批次遗忘池移除该词（错词本自动移出）
     rs.forEach(function (r) {
       const before = r.wrongPool.length;
       r.wrongPool = r.wrongPool.filter(function (w) { return w.w !== it.word; });
-      if (r.wrongPool.length !== before) changed = true;
+      if (r.wrongPool.length !== before) removedSet[it.word] = true;
     });
   });
-  if (changed) saveRecords(rs);
+  if (Object.keys(removedSet).length) saveRecords(rs);
+  return Object.keys(removedSet).length;
 }
 
 // 错词本自由复习：把全局错词本（聚合去重）作为自测内容，不依赖到期调度
@@ -742,13 +792,17 @@ function getLastReview() {
   return last;
 }
 
-// 下一次到期：未来最近的一个复习节点（今天无到期时看板显示用）
+// 下一次到期：未来最近的一个复习节点（今天无到期时看板显示用）。R22：十轮完成后
+// 池非空的批以巩固节点（最近复习日 + 间隔天）参与，与 getDueBatches 同口径
 function getNextDueInfo() {
   const today = todayStr();
   let best = null;
   getRecords().forEach(function (r) {
-    if (r.reviewsDone >= OFFSETS.length) return;
-    const node = addDays(r.date, OFFSETS[r.reviewsDone]);
+    if (r.words.length === 0 && r.wrongPool.length === 0) return;
+    let node;
+    if (r.reviewsDone < OFFSETS.length) node = addDays(r.date, OFFSETS[r.reviewsDone]);
+    else if (r.wrongPool.length) node = addDays(lastReviewDate(r), CONSOLIDATE_INTERVAL_DAYS);
+    else return;
     const days = diffDays(today, node);
     if (days > 0 && (!best || days < best.days)) {
       best = { batchNo: r.batchNo, batchId: r.batchId, date: node, days: days };
@@ -917,8 +971,9 @@ function getAccuracySummary() {
   };
 }
 
-// 复习排期推演（静态）：每个未完成批次只推「下一个」复习节点（date + OFFSETS[reviewsDone]），
-// 与 getDueBatches 同口径；逾期（节点 < 今天）归入今天并标 overdue；同日多批按词去重计词数
+// 复习排期推演（静态）：每个未完成批次只推「下一个」复习节点（date + OFFSETS[reviewsDone]；
+// R22：十轮完成后池非空的批推巩固节点 = 最近复习日 + 间隔天），与 getDueBatches 同口径；
+// 逾期（节点 < 今天）归入今天并标 overdue；同日多批按词去重计词数
 // （与今日到期合并口径一致，R15 灰词跨批不虚计）。days = 今天之后仍推演的天数上限。
 // FSRS 接入后重写本函数即可——页面只消费 { date, words } 聚合，不感知调度模型。
 function getReviewForecast(days) {
@@ -926,11 +981,13 @@ function getReviewForecast(days) {
   const range = days || 7;
   const map = {};
   getRecords().forEach(function (r) {
-    if (r.reviewsDone >= OFFSETS.length) return;
     if (r.words.length === 0 && r.wrongPool.length === 0) return; // 整批删空不再排期（同 getDueBatches）
+    let node;
+    if (r.reviewsDone < OFFSETS.length) node = addDays(r.date, OFFSETS[r.reviewsDone]);
+    else if (r.wrongPool.length) node = addDays(lastReviewDate(r), CONSOLIDATE_INTERVAL_DAYS);
+    else return;
     const src = r.reviewsDone < FULL_REVIEW_ROUNDS ? r.words : r.wrongPool;
     if (!src.length) return; // 空轮批到期即自动完成，不进排期预告
-    const node = addDays(r.date, OFFSETS[r.reviewsDone]);
     const d = diffDays(today, node);
     if (d > range) return;
     const key = d < 0 ? today : node; // 逾期批次归入今天聚合（与 getDueBatches 补做语义一致）
@@ -1014,6 +1071,7 @@ module.exports = {
   BATCH_SIZE: BATCH_SIZE,
   OFFSETS: OFFSETS,
   FULL_REVIEW_ROUNDS: FULL_REVIEW_ROUNDS,
+  CONSOLIDATE_INTERVAL_DAYS: CONSOLIDATE_INTERVAL_DAYS,
   todayStr: todayStr,
   addDays: addDays,
   getAccounts: getAccounts,
@@ -1057,6 +1115,7 @@ module.exports = {
   getWrongWords: getWrongWords,
   inWrongPool: inWrongPool,
   removeWrongWord: removeWrongWord,
+  markBatchWordsForgot: markBatchWordsForgot,
   getReviewView: getReviewView,
   setReviewView: setReviewView
 };

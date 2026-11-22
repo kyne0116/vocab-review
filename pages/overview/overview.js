@@ -17,6 +17,15 @@ function daysTo(dateStr) {
   return Math.round((base - today) / 86400000);
 }
 
+// 最近学习时间文案：≤7 天相对（今天/昨天/N 天前），同年 MM-DD，跨年完整日期（未学批返回空不展示）
+function lastActiveText(dateStr) {
+  if (!dateStr) return '';
+  const ago = -daysTo(dateStr);
+  if (ago <= 7) return ago === 0 ? '今天' : (ago === 1 ? '昨天' : ago + ' 天前');
+  const y = new Date().getFullYear();
+  return dateStr.indexOf(y + '-') === 0 ? dateStr.slice(5) : dateStr;
+}
+
 function buildItem(b) {
   const s = STATE[b.state] || STATE.todo;
   const isLearned = b.state === 'done' || b.state === 'learning';
@@ -44,9 +53,14 @@ function buildItem(b) {
       tlCenter = dd < 0 ? '已逾期 · 今天补做' : (dd === 0 ? '今天到期' : '下次 ' + nd + '（还有 ' + dd + ' 天）');
     } else {
       petLeft = 100;
-      tlCenter = '已走完全程 🎉';
+      // R22：十轮走完但遗忘池非空 → 巩固循环中（每 7 天一轮，池空才算彻底完成）
+      tlCenter = b.wrongCount > 0 ? '已走完全程 · ' + b.wrongCount + ' 词巩固中' : '已走完全程 🎉';
     }
   }
+  // 最近学习时间：最后一次复习日期，无复习记录用学习日（活动按时间顺序追加，末条即最近）
+  const lastActive = isLearned
+    ? ((b.reviewHistory && b.reviewHistory.length) ? b.reviewHistory[b.reviewHistory.length - 1].date : b.date)
+    : '';
   return {
     batchNo: b.batchNo,
     batchId: b.batchId,
@@ -57,11 +71,13 @@ function buildItem(b) {
     stateCls: s.cls,
     isLearned: isLearned,
     isLearning: b.state === 'learning',
+    isDone: b.state === 'done', // R22：已完成十轮（池非空时展示「巩固 ▸」入口）
     reviewsDone: b.reviewsDone,
     rounds: b.rounds,
     wrongCount: b.wrongCount,
     hasWrong: b.wrongCount > 0,
     date: b.date,
+    lastActive: lastActiveText(lastActive),
     words: b.words,
     acc: accInfo ? accInfo.acc : null,
     accTrend: accInfo && accInfo.trend ? accInfo.trend : '',

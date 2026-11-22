@@ -8,8 +8,11 @@
 //   ① 识别自带自评注记（note：注记还原说明 / 低置信），候选页对用户透明展示；
 //   ② correctWord 单词级带图纠错（待补义词「AI 纠错」入口 / 候选页长按）；
 //   ③ AUTO_FIX=true 时查义失败词自动拉取纠错建议（仅展示，用户点「改用它」才生效）。
+// 2026-11-21 回退链：主配置（免费 glm-4.6v-flash）请求失败（429 限流/余额不足/网络错误等）
+//   时按 fallbacks 配置顺序依次切换收费 Key 重试，顺序靠前优先；全链失败才降级 VK/报错。
 
-const DEFAULT_MODEL = 'glm-4.6v-flash'; // 2026-11-08 升级（实测可用、免费）；付费旗舰 glm-4.6v 更强但需账户余额
+const DEFAULT_MODEL = 'glm-4.6v-flash'; // 免费主路线（2026-11-08 升级，实测可用）
+const FALLBACK_MODEL = 'glm-4.6v';     // 回退链默认付费旗舰（fallback 未写 model 时使用）
 const DEFAULT_BASE_URL = 'https://open.bigmodel.cn';
 let cfg = { apiKey: '', model: DEFAULT_MODEL, baseUrl: DEFAULT_BASE_URL };
 try { cfg = require('./llm.config.js'); } catch (e) { /* 未创建配置文件：AI 主路线停用，走 VK */ }
@@ -39,7 +42,8 @@ function errOf(code, message) {
 }
 
 function configured() {
-  return typeof cfg.apiKey === 'string' && cfg.apiKey.length >= 20;
+  // 主 Key 或任一 fallback 有效即启用（链构建已过滤无效项）：免费不可用时收费 Key 顶替
+  return buildChain().length > 0;
 }
 
 function getImageInfo(src) {
@@ -84,13 +88,33 @@ function fileBase64(path) {
   });
 }
 
-function requestLLM(b64, mime, prompt) {
+// 回退链构建（纯函数，L1 可测）：主配置（Key 有效时）排链首，fallbacks 按配置顺序依次追加，
+// 无效项（无 Key / Key 过短 / null）过滤；fallback 未写 model 时用付费旗舰 FALLBACK_MODEL
+function chainFrom(config) {
+  const list = [];
+  if (config && typeof config.apiKey === 'string' && config.apiKey.length >= 20) {
+    list.push({ apiKey: config.apiKey, model: config.model || DEFAULT_MODEL });
+  }
+  const fb = config && Array.isArray(config.fallbacks) ? config.fallbacks : [];
+  fb.forEach(function (f) {
+    if (f && typeof f.apiKey === 'string' && f.apiKey.length >= 20) {
+      list.push({ apiKey: f.apiKey, model: f.model || FALLBACK_MODEL });
+    }
+  });
+  return list;
+}
+
+function buildChain() {
+  return chainFrom(cfg);
+}
+
+function requestOnce(item, b64, mime, prompt) {
   return new Promise(function (resolve, reject) {
     // 4.5V/4.6V 系列默认开思考模式：真实词表图实测思考 35s+（app 必超时降级 VK），
     // 且思考耗尽 max_tokens 致正文为空；关思考后 6~18s 直出、识别质量不降
     //（2026-11-08 真实检测表照片实测）。glm-4v-flash 等旧模型无此参数，不发。
     const body = {
-      model: cfg.model,
+      model: item.model,
       temperature: 0.1,
       max_tokens: 1000,
       messages: [{
@@ -101,14 +125,14 @@ function requestLLM(b64, mime, prompt) {
         ]
       }]
     };
-    if (/glm-4\.[56]v/.test(cfg.model)) body.thinking = { type: 'disabled' };
+    if (/glm-4\.[56]v/.test(item.model)) body.thinking = { type: 'disabled' };
     wx.request({
       url: cfg.baseUrl + '/api/paas/v4/chat/completions',
       method: 'POST',
       timeout: TIMEOUT,
       header: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + cfg.apiKey
+        'Authorization': 'Bearer ' + item.apiKey
       },
       data: body,
       success: function (res) {
@@ -126,6 +150,21 @@ function requestLLM(b64, mime, prompt) {
       }
     });
   });
+}
+
+// 按回退链依次请求：任一级成功即返回；失败（429 限流/余额/网络等）切下一级，全失败抛最后错误
+function requestLLM(b64, mime, prompt) {
+  const list = buildChain();
+  console.log('[LLM] 请求链：' + list.map(function (x) { return x.model; }).join(' → '));
+  function attempt(i) {
+    return requestOnce(list[i], b64, mime, prompt).catch(function (err) {
+      if (i + 1 >= list.length) throw err;
+      console.log('[LLM] ' + list[i].model + ' 失败，切换 ' + list[i + 1].model + '：'
+        + ((err && err.message) || err));
+      return attempt(i + 1);
+    });
+  }
+  return attempt(0);
 }
 
 // 模型返回内容 → 单词数组（容忍代码围栏 / 数组外附带说明 / 非严格 JSON）
@@ -214,7 +253,7 @@ function recognize(imageSrc) {
   if (!configured()) return Promise.reject(errOf('LLM_UNCONFIGURED', '未配置 AI 识别 Key'));
   return prepare(imageSrc).then(function (p) {
     if (p.b64.length > MAX_B64) throw errOf('LLM_TOO_LARGE', '图片过大，切换本地识别');
-    console.log('[LLM] 请求派发：' + cfg.model + '，base64 ' + Math.round(p.b64.length / 1024) + 'KB');
+    console.log('[LLM] 请求派发：base64 ' + Math.round(p.b64.length / 1024) + 'KB');
     return requestLLM(p.b64, p.mime, PROMPT);
   }).then(function (content) {
     const entries = parseEntries(content);
@@ -259,6 +298,8 @@ module.exports = {
   MAX_SEND_EDGE: MAX_SEND_EDGE,
   AUTO_FIX: AUTO_FIX,
   configured: configured,
+  chainFrom: chainFrom, // 以下供 L1 测试（纯函数，不依赖 wx）
+  buildChain: buildChain,
   parseWords: parseWords,
   parseEntries: parseEntries,
   parseCorrection: parseCorrection,

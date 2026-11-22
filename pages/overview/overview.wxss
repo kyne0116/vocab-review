@@ -87,6 +87,12 @@
   padding: 4rpx 14rpx;
   border-radius: 24rpx;
 }
+/* 最近学习时间：≤7 天相对 / 更早日期（MM-DD 或跨年完整），弱化灰不与状态徽标抢焦点 */
+.last-active {
+  font-size: 22rpx;
+  color: #999;
+  flex-shrink: 0;
+}
 .bh-right {
   display: flex;
   flex-direction: column;

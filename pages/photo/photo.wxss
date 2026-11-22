@@ -37,7 +37,7 @@
   margin-bottom: 16rpx;
 }
 
-/* 候选词行：known=内置命中（R04 标灰禁选） */
+/* 候选词行：known=当前账号已收录（未勾选时置灰；勾选随批学的恢复正常不透明度，2026-11-10） */
 .cand {
   display: flex;
   align-items: center;
@@ -46,6 +46,7 @@
 }
 .cand:last-child { border-bottom: none; }
 .cand.known { opacity: 0.45; }
+.cand.known.row-checked { opacity: 1; }
 .cand-check {
   width: 40rpx;
   height: 40rpx;
@@ -86,6 +87,9 @@
   font-size: 28rpx;
   text-align: center;
 }
+
+/* 入口页「手动录入单词」按钮下的说明（2026-11-10） */
+.manual-tip { margin-top: 14rpx; }
 
 /* 候选页底部识别来源标注（2026-11-08，文案经用户确认）：按实际路线显示技术方与照片去向 */
 .engine-tip {

@@ -6,7 +6,10 @@
       <view class="head-help" bindtap="showGuide">使用指南</view>
     </view>
     <view class="head-main">
-      <view class="head-name">{{accountName}}</view>
+      <view class="head-name-wrap">
+        <view class="head-account-tag">当前账号</view>
+        <view class="head-name">{{accountName}}</view>
+      </view>
       <view class="head-streak" wx:if="{{streak > 0}}">🔥 连续 {{streak}} 天</view>
     </view>
     <view class="head-bottom">
@@ -59,7 +62,7 @@
   <view class="card photo" bindtap="goPhoto">
     <view class="photo-left">
       <view class="photo-title">📷 拍照收词</view>
-      <view class="photo-desc text-muted">拍课本 / 练习册，AI 识别生词并收录，优先学习</view>
+      <view class="photo-desc text-muted">拍课本 / 练习册 AI 识别生词，或手动录入单词，收录后优先学习</view>
     </view>
     <view class="photo-go">▸</view>
   </view>
@@ -109,7 +112,7 @@
       <view class="family-note">点按切换账号</view>
     </view>
     <view class="family-row {{f.id === currentAccountId ? 'me' : ''}}"
-          wx:for="{{family}}" wx:key="id" bindtap="pickAccount" data-id="{{f.id}}">
+          wx:for="{{family}}" wx:for-item="f" wx:key="id" bindtap="pickAccount" data-id="{{f.id}}">
       <text class="family-rank">{{f.rank}}</text>
       <text class="family-pet">{{f.petEmoji}}</text>
       <view class="family-info">

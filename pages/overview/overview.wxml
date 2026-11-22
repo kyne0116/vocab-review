@@ -25,6 +25,7 @@
           <text wx:if="{{b.isLearned}}" class="review-text">复习 {{b.reviewsDone}}/{{b.rounds}}</text>
           <text wx:if="{{b.acc !== null}}" class="acc {{b.accTrend}}">正确率 {{b.acc}}%{{b.trendArrow}}</text>
           <text wx:if="{{b.hasWrong}}" class="wrong-tag">{{b.wrongCount}} 需巩固</text>
+          <text wx:if="{{b.lastActive}}" class="last-active">🕒 {{b.lastActive}}</text>
         </view>
       </view>
       <view class="bh-right">
@@ -32,6 +33,7 @@
           <text wx:if="{{b.isCurrent}}" class="op" catchtap="goNew">去学习 ▸</text>
           <text wx:elif="{{!b.isLearned}}" class="op dim" catchtap="notYet">未轮到</text>
           <text wx:if="{{b.isLearning}}" class="op" catchtap="goReview" data-id="{{b.batchId}}">复习 ▸</text>
+          <text wx:if="{{b.isDone && b.hasWrong}}" class="op" catchtap="goReview" data-id="{{b.batchId}}">巩固 ▸</text>
           <text wx:if="{{b.isLearned}}" class="op act" catchtap="goStudy" data-id="{{b.batchId}}">重学 ▸</text>
         </view>
         <view class="arrow">{{b.open ? '收起 ▲' : '展开 ▼'}}</view>
@@ -65,7 +67,7 @@
           第{{item.round}}次 · {{item.date}} · 共{{item.total}}词，错{{item.wrong}}词<text wx:if="{{item.accText}}">（{{item.accText}}）</text>
         </view>
       </block>
-      <view class="rw" wx:if="{{b.hasWrong}}">本批遗忘池 {{b.wrongCount}} 词 · 会进入错词本并在后续轮次再考</view>
+      <view class="rw" wx:if="{{b.hasWrong}}">本批遗忘池 {{b.wrongCount}} 词 · 会进入错词本并在后续轮次再考{{b.isDone ? '（每 7 天自动巩固一轮）' : ''}}</view>
       <view class="rw text-muted" wx:if="{{b.isLearned && b.reviewsDone === 0}}">已学习 · 第 1 天起开始 10 次间隔复习</view>
       <view class="rw text-muted" wx:if="{{!b.isLearned}}">尚未学习 · 轮到你时上方的「去学习」会带你去学这一批</view>
     </block>

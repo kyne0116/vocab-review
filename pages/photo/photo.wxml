@@ -22,6 +22,12 @@
         <view class="text-muted">请把微信升级到最新版本后重试，或配置 AI 深度识别（见 README「拍照收词」）。</view>
       </block>
     </view>
+    <!-- 手动录入（2026-11-10）：不依赖识别能力，鸿蒙 / 未配 AI 也可收词；置于不支持提示之后，
+         保持上方 wx:if/wx:else 两卡相邻（wx:else 必须紧跟 wx:if，中间不能插入其他元素） -->
+    <view class="card">
+      <button class="btn-plain act-btn" bindtap="startManual">手动录入单词</button>
+      <view class="text-muted manual-tip">不拍照也能收词：逐个输入英文单词，自动查询释义后加入学习计划与词库。</view>
+    </view>
   </block>
 
   <!-- 识别中 -->
@@ -35,12 +41,13 @@
   <!-- 勾选候选词 -->
   <block wx:if="{{stage === 'pick'}}">
     <view class="card">
-      <view class="list-title">识别到 {{candidates.length}} 个单词（已勾选 {{checkedCount}}）</view>
-      <view class="text-muted hint">灰色「已收录」= 本账号词库已有或以前拍过，不重复收录，但会随本批一起学习。点右侧红色「修改」可改单词拼写{{llmOk ? '，长按单词可 AI 核对' : '' }}。</view>
+      <view class="list-title">{{manual ? '已录入' : '识别到'}} {{candidates.length}} 个单词（已勾选 {{checkedCount + knownChecked}}）</view>
+      <view class="text-muted hint" wx:if="{{manual}}">逐个输入英文单词，查义后一并收录；「已收录」= 本账号词库已有，不重复入库，默认勾选随本批学习，可取消。</view>
+      <view class="text-muted hint" wx:else>「已收录」= 本账号词库已有或以前拍过，不重复入库；默认勾选随本批一起学习，可取消勾选。点右侧红色「修改」可改单词拼写{{llmOk ? '，长按单词可 AI 核对' : '' }}。</view>
       <view class="glue-tip" wx:if="{{glueCount > 0}}">
         ⚠️ 另有 {{glueCount}} 段连串文字被过滤（文字过小或多列版面粘连），以下结果可能不完整；建议对原页面近距离重拍。
       </view>
-      <view class="cand {{item.known ? 'known' : ''}}" wx:for="{{candidates}}" wx:key="w"
+      <view class="cand {{item.known ? 'known' : ''}} {{item.checked ? 'row-checked' : ''}}" wx:for="{{candidates}}" wx:key="w"
             data-idx="{{index}}" bindtap="toggle" bindlongpress="fixCandidate">
         <view class="cand-check {{item.checked ? 'on' : ''}}">{{item.checked ? '✓' : ''}}</view>
         <view class="cand-main">
@@ -52,9 +59,12 @@
       </view>
       <view class="cand-add" bindtap="addWord">＋ 添加单词</view>
     </view>
-    <button class="btn-primary act-btn" bindtap="lookupMeanings">查询释义（{{checkedCount}} 词）</button>
-    <button class="btn-plain act-btn" bindtap="again">重新拍照</button>
-    <view class="engine-tip">{{engine === 'vk' ? '本机识别 · 微信 VisionKit · 照片未离开手机' : 'AI 识别 · 智谱 GLM 视觉大模型 · 照片已上传云端'}}</view>
+    <!-- 有新词先查义；只勾选已收录词时释义取词库快照，无需查义直接收录 -->
+    <button wx:if="{{checkedCount > 0}}" class="btn-primary act-btn" bindtap="lookupMeanings">查询释义（{{checkedCount}} 词）</button>
+    <button wx:elif="{{knownChecked > 0}}" class="btn-primary act-btn" bindtap="save">收录本批（已收录 {{knownChecked}} 词，无需查义）</button>
+    <button wx:else class="btn-primary act-btn" bindtap="lookupMeanings">查询释义（0 词）</button>
+    <button class="btn-plain act-btn" bindtap="again">{{manual ? '清空并返回' : '重新拍照'}}</button>
+    <view class="engine-tip" wx:if="{{!manual && engine}}">{{engine === 'vk' ? '本机识别 · 微信 VisionKit · 照片未离开手机' : 'AI 识别 · 智谱 GLM 视觉大模型 · 照片已上传云端'}}</view>
   </block>
 
   <!-- 查义进度 -->
@@ -72,7 +82,8 @@
   <block wx:if="{{stage === 'result'}}">
     <view class="card">
       <view class="list-title">查词完成：{{okCount}}/{{entries.length}} 个词有释义</view>
-      <view class="text-muted hint">待补义词可重试或 AI 纠错；发现拼写有误，请在查义前的候选列表用「修改」改词后重新查义。</view>
+      <view class="text-muted hint" wx:if="{{manual}}">待补义词可点「重试」；拼写有误时，用下方「＋ 添加单词」重新录入正确拼写即可，待补义词不会被收录。</view>
+      <view class="text-muted hint" wx:else>待补义词可重试或 AI 纠错；发现拼写有误，请在查义前的候选列表用「修改」改词后重新查义。</view>
       <view class="entry" wx:for="{{entries}}" wx:key="w">
         <view class="entry-main">
           <view class="entry-head">
@@ -92,11 +103,11 @@
       </view>
       <view class="cand-add" bindtap="addWord">＋ 添加单词</view>
     </view>
-    <button class="btn-primary act-btn" bindtap="save">收录本批（新 {{okCount}} + 已收 {{knownCount}}）</button>
+    <button class="btn-primary act-btn" bindtap="save">收录本批（新 {{okCount}}{{knownChecked > 0 ? ' + 已收 ' + knownChecked : ''}}）</button>
     <view class="text-muted pending-tip" wx:if="{{entries.length - okCount > 0}}">
-      {{entries.length - okCount}} 个待补义词暂不收录，可通过重试、AI 纠错或点「修改」改单词补齐后再收录
+      {{entries.length - okCount}} 个待补义词暂不收录，{{manual ? '可点「重试」或用「＋ 添加单词」重新录入补齐' : '可通过重试、AI 纠错或点「修改」改单词补齐后再收录'}}
     </view>
-    <button class="btn-plain act-btn" bindtap="again">重新拍照</button>
+    <button class="btn-plain act-btn" bindtap="again">{{manual ? '清空并返回' : '重新拍照'}}</button>
   </block>
 
   <!-- 完成页 -->
@@ -109,9 +120,10 @@
       <view class="text-muted" wx:if="{{entries.length - okCount > 0}}">
         {{entries.length - okCount}} 个待补义词未收录
       </view>
-      <view class="text-muted">已加入当前账号「{{accName}}」，点「新单词」将优先学习这批拍照生词。</view>
-      <button class="btn-primary act-btn" bindtap="goStudy">去学习拍照生词</button>
-      <button class="btn-plain act-btn" bindtap="again">继续拍照收词</button>
+      <view class="text-muted">已加入当前账号「{{accName}}」，点「新单词」将优先学习{{manual ? '这批手动录入的生词' : '这批拍照生词'}}。</view>
+      <button class="btn-primary act-btn" bindtap="goStudy">去学习{{manual ? '这批生词' : '拍照生词'}}</button>
+      <button wx:if="{{manual}}" class="btn-plain act-btn" bindtap="startManual">继续手动录入</button>
+      <button wx:else class="btn-plain act-btn" bindtap="again">继续拍照收词</button>
     </view>
   </block>
 </view>

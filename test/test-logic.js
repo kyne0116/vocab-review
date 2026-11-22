@@ -1151,4 +1151,201 @@ const jr27 = store.nextBatch();
 eq([jr27.batchNo, jr27.start, jr27.words[0].w, !!jr27.photo], [1, 0, jBank27[0].w, false], '初中回到第1批第1词（已删词恢复）');
 eq([store.getStats().learned, store.getReviewView(), store.getWrongWords().length], [0, 'card', 0], '初中统计、偏好、错词本回到初始');
 
+// ---- 场景28：已收录词可选随批学 + 手动录入会话 + 跨账号隔离与冷启动持久化（2026-11-10） ----
+// 拍照页把「勾选」落到 store 的方式 = 只把勾选的词传给 savePhotoSession（已收录词带 gray）；
+// 手动录入 = 同一函数第二参数 manual=true。本场景锁定这两条 store 契约及其账号隔离
+['junior', 'primary'].forEach(function (id) {
+  Object.keys(storage).forEach(function (k) { if (k.slice(-(id.length + 1)) === '_' + id) delete storage[k]; });
+});
+store.switchAccount('junior');
+setDay(2027, 8, 1);
+const jBank28 = store.currentBank().slice();
+eq([store.nextBatch().start, store.getPhotoSessions('junior').length], [0, 0], '28 起点：初中教材第1批、无待学会话（同首页先读一次）');
 
+// 28a 一次拍照识别到 3 个已收录词 + 1 个新词，用户取消勾选其中 1 个已收录词 → 页面只传勾选的 3 项
+const r28a = store.savePhotoSession([
+  { w: jBank28[0].w, gray: true },
+  { w: 'pk1', m: 'n. 拍一', p: 'pk' },
+  { w: jBank28[2].w, gray: true }
+]);
+eq(r28a, { added: 1, gray: 2, total: 3 }, '28a 勾选的已收录词2 + 新词1 = 会话3词');
+let ses28 = store.getPhotoSessions('junior');
+eq(ses28[0].words.map(w => w.w), [jBank28[0].w, 'pk1', jBank28[2].w], '28a 会话词单 = 勾选的词（保持出现顺序）');
+eq(ses28[0].words.some(w => w.w === jBank28[1].w), false, '28a 未勾选的已收录词不进本次学习计划');
+eq(store.getAccountPhotoWords('junior').map(x => x.w), ['pk1'], '28a 已收录词不重复入库（队列只增新词）');
+eq([!!ses28[0].manual, store.currentBank().length], [false, jBank28.length], '28a 拍照会话不带手动标、教材库不受影响');
+
+// 28a2 只勾选已收录词（教材词 + 队列词）也能成会话：纯复习批，不入队
+eq(store.savePhotoSession([{ w: jBank28[5].w, gray: true }, { w: 'pk1', gray: true }]),
+  { added: 0, gray: 2, total: 2 }, '28a2 纯已收录词会话（无新词）');
+eq(store.getAccountPhotoWords('junior').length, 1, '28a2 纯已收录词会话不入队');
+eq(store.savePhotoSession([]), { added: 0, gray: 0, total: 0 }, '28a2 一个都不勾选 → 不生成会话');
+eq(store.getPhotoSessions('junior').length, 2, '28a2 空收录不产生空会话');
+
+// 28b 手动录入会话：新词入队 + 会话，二者带 manual 标；库中已有词取快照不入队
+eq(store.savePhotoSession([{ w: 'mn1', m: 'n. 手一', p: 'mn' }, { w: jBank28[9].w, gray: true }], true),
+  { added: 1, gray: 1, total: 2 }, '28b 手动录入：新词1 + 已收录1');
+ses28 = store.getPhotoSessions('junior');
+eq(ses28.map(s => !!s.manual), [false, false, true], '28b 仅手动会话带 manual 标');
+eq(store.getAccountPhotoWords('junior').map(x => [x.w, !!x.manual]), [['pk1', false], ['mn1', true]], '28b 仅手录词条带 manual 标');
+let nb28 = store.nextBatch();
+eq([nb28.photo, !!nb28.manual, nb28.words.length], [true, false, 3], '28b 会话先进先出：拍照会话先出批、无手动标');
+store.saveLearnedBatch(nb28);              // 批1：拍照会话（3词）
+store.saveLearnedBatch(store.nextBatch()); // 批2：纯已收录词会话（2词）
+nb28 = store.nextBatch();
+eq([nb28.photo, nb28.manual, nb28.words.map(w => w.w)], [true, true, ['mn1', jBank28[9].w]], '28b 手动会话出批带 manual 标（页面批次头据此标注）');
+eq(nb28.words[1].m, jBank28[9].m, '28b 手动会话中的已收录词取词库释义快照');
+const e28 = {};
+store.getBankEntries().forEach(function (x) { e28[x.w] = x; });
+eq([e28.pk1.photo, e28.pk1.manual, e28.mn1.photo, e28.mn1.manual, !!e28[jBank28[0].w].manual],
+  [true, false, true, true, false], '28b 词库页：拍照词 / 手录词 / 教材词来源标');
+
+// 28b2 新单词页「添加单词」入队同样带手动标；删会话词后会话的手动标保留
+eq(store.addToCurrentBatch({ w: 'mn2', m: 'n. 手二' }), true, '28b2 新单词页加词进当前手动会话');
+eq(store.getAccountPhotoWords('junior').filter(x => x.w === 'mn2')[0].manual, true, '28b2 新单词页添加的词入队带手动标');
+eq(store.removeWords(['mn2']), { removed: 1, learned: 0 }, '28b2 删掉刚加的词');
+ses28 = store.getPhotoSessions('junior');
+eq([ses28.length, ses28[0].manual, ses28[0].words.map(w => w.w)], [1, true, ['mn1', jBank28[9].w]], '28b2 删会话词后手动标与其余词保留');
+
+// 28c 跨账号：小学看不到初中的会话 / 队列；另一账号的同名词在本账号算新词、释义各自独立
+const J28 = accKeys27('junior');
+eq(store.switchAccount('primary'), true, '28c 切到小学');
+const pBank28 = store.currentBank().slice();
+const pn28 = store.nextBatch();
+eq([!!pn28.photo, !!pn28.manual, pn28.start, pn28.words[0].w], [false, false, 0, pBank28[0].w], '28c 小学出自己的教材第1批（看不到初中的手动会话）');
+eq(store.getPhotoSessions('primary').length, 0, '28c 小学无待学会话');
+eq([store.inCurrentBank('mn1'), store.inCurrentBank('pk1')], [false, false], '28c 初中的手录词 / 拍照词不算小学已收录');
+eq(store.getStats().totalWords, pBank28.length, '28c 小学词库总量不含初中收词');
+eq(accKeys27('junior'), J28, '28c 切换并读取小学后，初中存储不变');
+eq(store.savePhotoSession([{ w: 'mn1', m: 'n. 小学版手一' }, { w: pBank28[3].w, gray: true }], true),
+  { added: 1, gray: 1, total: 2 }, '28c 小学手动录入：初中已有的手录词在小学算新词');
+eq(accKeys27('junior'), J28, '28c 小学收词不改初中存储');
+const P28 = accKeys27('primary');
+store.switchAccount('junior');
+const jn28 = store.nextBatch();
+eq([jn28.manual, jn28.words.map(w => w.w)], [true, ['mn1', jBank28[9].w]], '28c 切回初中：手动会话原样');
+eq(store.getAccountPhotoWords('junior').filter(x => x.w === 'mn1')[0].m, 'n. 手一', '28c 同名词各账号释义快照独立');
+eq(store.getRecords().length, 2, '28c 初中学习记录仍为2批');
+eq(accKeys27('primary'), P28, '28c 切回初中后，小学存储不变');
+store.switchAccount('primary');
+const pn28b = store.nextBatch();
+eq([pn28b.manual, pn28b.words.map(w => w.w), pn28b.words[0].m], [true, ['mn1', pBank28[3].w], 'n. 小学版手一'], '28c 再切小学：自己的手动会话与释义');
+eq(store.getRecords().length, 0, '28c 小学仍无学习记录');
+
+// 28d 冷启动持久化：丢弃模块缓存重新加载 store（模拟杀进程重开），词库与学习计划全部来自存储
+const storePath28 = require.resolve(path.join(__dirname, '..', 'utils', 'store.js'));
+delete require.cache[storePath28];
+const store28 = require(storePath28);
+eq(store28 === store, false, '28d 重新加载得到全新模块实例（无内存残留）');
+eq(store28.currentAccount().id, 'primary', '28d 冷启动后当前账号指针仍在');
+eq(store28.nextBatch().words.map(w => w.w), ['mn1', pBank28[3].w], '28d 冷启动后小学学习计划仍在');
+store28.switchAccount('junior');
+eq([store28.getRecords().length, store28.nextBatch().manual, store28.getAccountPhotoWords('junior').map(x => x.w)],
+  [2, true, ['pk1', 'mn1']], '28d 冷启动后初中学习记录 / 学习计划 / 词库仍在');
+const before28 = exceptPointer27();
+for (let i = 0; i < 20; i++) {
+  store28.switchAccount(i % 2 ? 'primary' : 'junior');
+  store28.getStats(); store28.getOverview(); store28.nextBatch(); store28.getBankEntries(); store28.getAccountsOverview();
+}
+eq(exceptPointer27(), before28, '28d 带手动会话来回切换20次后存储零变化（仅当前账号指针改变）');
+
+// 28e 一键初始化只清当前账号的手动会话与手录词，另一账号的不受影响
+store28.switchAccount('junior');
+eq(store28.resetAccountProgress('junior'), true, '28e 初始化初中');
+eq([!!store28.nextBatch().photo, store28.getAccountPhotoWords('junior').length, store28.getRecords().length],
+  [false, 0, 0], '28e 初中的手动会话 / 手录词 / 记录清空，回落教材批');
+eq(accKeys27('primary'), P28, '28e 小学的手动会话与词库不受影响');
+
+
+
+// ---- 场景29：初学「未掌握」登记（R22：快测标忘/默写拼错落池 markBatchWordsForgot）----
+// 28e 后初中账号已初始化：从这里开始干净批次。锁定契约：登记即刻进错词本、幂等、
+// 批外词忽略、跨账号隔离；正式复习连对 2 次解除；finishReview 返回移出毛数（非净变化）。
+eq(store.currentAccount().id, 'junior', '29 当前为初中账号（28e 初始化后）');
+setDay(2027, 5, 1);
+store.saveLearnedBatch(store.nextBatch()); // 初中批1（35词，2027-05-01 学习）
+const bid29 = store.getRecords()[0].batchId;
+const m29 = store.getRecords()[0].words.slice(0, 3).map(w => w.w);
+eq(store.markBatchWordsForgot(bid29, m29), 3, '29 标记3词落池，新入池3');
+eq(store.getWrongWords().length, 3, '29 登记即刻进错词本（3词）');
+eq(store.getRecords()[0].wrongPool.map(w => w.w), m29, '29 池内容=标记词');
+eq(store.markBatchWordsForgot(bid29, m29), 0, '29 重复登记幂等：新入池0');
+eq(store.getRecords()[0].wrongPool.length, 3, '29 幂等：池不变');
+eq(store.markBatchWordsForgot(bid29, ['zzz-not-in-batch']), 0, '29 批内不存在的词不落池');
+store.switchAccount('primary');
+eq(store.getWrongWords().length, 0, '29 跨账号隔离：小学错词本不含初中登记词');
+store.switchAccount('junior');
+// 第1轮全量复习（5/2）：登记3词答对→streak=1 留池；第4词新忘入池
+setDay(2027, 5, 2);
+let s29 = store.buildReviewSession();
+eq(s29.items.length, 35, '29 第1轮全量35词（登记不改变轮次内容）');
+const f29a = {};
+f29a[s29.items[3].word] = true;
+eq(store.finishReview(s29, f29a), 0, '29 首轮连对未满2 → 移出0');
+eq(store.getRecords()[0].wrongPool.length, 4, '29 池=3登记+1新忘');
+eq(store.getRecords()[0].correctStreak[m29[0]], 1, '29 登记词连对1次待确认');
+// 第2轮全量（5/3）：登记3词答对（streak=2 移出）、上轮新忘词答对（streak=1 留池）、再新忘1词
+setDay(2027, 5, 3);
+s29 = store.buildReviewSession();
+const f29b = {};
+f29b[s29.items[4].word] = true; // 第5词本轮新忘
+eq(store.finishReview(s29, f29b), 3, '29 返回移出毛数3（池4→2 净-1：同轮移出3+新入1，返回与净变化脱钩）');
+eq(store.getRecords()[0].wrongPool.length, 2, '29 池=待二次确认词+本轮新忘词');
+eq(store.getWrongWords().length, 2, '29 错词本剩2词');
+
+// ---- 场景30：巩固循环（R22：十轮完成后池非空的批每 7 天一轮，直至池空结业）----
+// 手工构造：批1十轮完成、池2词（word4 已连对1次、w10 连对0次），末次复习 2027-05-20
+const rs30 = store.getRecords();
+const pool30a = rs30[0].wrongPool[0];
+const pool30b = rs30[0].words[10];
+rs30[0].reviewsDone = 10;
+rs30[0].wrongPool = [pool30a, pool30b];
+rs30[0].correctStreak = {};
+rs30[0].correctStreak[pool30a.w] = 1;
+rs30[0].correctStreak[pool30b.w] = 0;
+rs30[0].reviewHistory = [{ date: '2027-05-20', round: 10, total: 1, wrong: 0, forgot: [] }];
+storage.vocab_records_junior = rs30;
+setDay(2027, 5, 26);
+eq(store.getDueBatches().length, 0, '30 距末次复习<7天：无巩固任务');
+const nd30 = store.getNextDueInfo();
+eq([nd30.batchNo, nd30.date, nd30.days], [1, '2027-05-27', 1], '30 下一节点=巩固日5/27');
+const fc30 = store.getReviewForecast(7);
+eq(fc30.length, 1, '30 排期含巩固节点');
+eq([fc30[0].date, fc30[0].words], ['2027-05-27', 2], '30 巩固节点=5/27 考池中2词');
+eq(store.buildBatchReviewSession(bid29).items.length, 2, '30 指定批次复习放行巩固批（池非空）');
+setDay(2027, 5, 27);
+const s30 = store.buildReviewSession();
+eq(s30.items.length, 2, '30 巩固轮只考遗忘池2词');
+eq(store.finishReview(s30, {}), 1, '30 全对：连对1次的词出池，连对0次的留待下轮');
+const r30 = store.getRecords()[0];
+eq([r30.reviewsDone, r30.wrongPool.length], [11, 1], '30 巩固轮计入第11次，池剩1词');
+eq(r30.reviewHistory[r30.reviewHistory.length - 1].round, 11, '30 历史记录 round=11（巩固轮口径）');
+eq(store.getDueBatches().length, 0, '30 当天做完后未满7天：无新任务');
+// 自由复习移出最后一词（主动自测口径：1 次答对即信任）→ 彻底结业
+const free30 = store.buildFreeReviewSession();
+eq(free30.items.length, 1, '30 自由复习=剩余池词');
+eq(store.finishFreeReview(free30, {}), 1, '30 自由复习答对移出，返回1');
+setDay(2027, 6, 5);
+eq(store.getDueBatches().length, 0, '30 池空后不再产生巩固任务');
+eq(store.getNextDueInfo(), null, '30 结业：无下一节点');
+eq(store.getReviewForecast(7).length, 0, '30 结业：排期空');
+eq(store.getStats().mastered, 35, '30 十轮+池空 → 全批词计入已掌握');
+
+// ---- 场景31：LLM 请求回退链构建（utils/llm.js chainFrom 纯函数，不依赖 wx） ----
+const llm = require(path.join(__dirname, '..', 'utils', 'llm.js'));
+const key = (p, s) => p.repeat(32) + '.' + s.repeat(16); // 49 字符，满足 ≥20 长度校验
+const chain31 = llm.chainFrom({
+  apiKey: key('a', 'x'), model: 'glm-4.6v-flash',
+  fallbacks: [{ apiKey: key('b', 'y') }, { apiKey: 'short' }, null, { apiKey: key('c', 'z'), model: 'glm-5v-turbo' }, { model: 'glm-4.6v' }]
+});
+eq(chain31.length, 3, '31 主配置+两个有效 fallback 入链，无效项（短Key/null/无Key）被过滤');
+eq(chain31[0].model, 'glm-4.6v-flash', '31 主配置（免费模型）排链首');
+eq(chain31[1].apiKey, key('b', 'y'), '31 fallback 按数组顺序排布（靠前优先）');
+eq(chain31[1].model, 'glm-4.6v', '31 fallback 未写 model 时缺省付费旗舰 glm-4.6v');
+eq(chain31[2].model, 'glm-5v-turbo', '31 fallback 显式 model 按配置');
+eq(llm.chainFrom({ apiKey: '', fallbacks: [{ apiKey: key('b', 'y') }] }).length, 1, '31 主 Key 无效但 fallback 有效时收费顶替入链');
+eq(llm.chainFrom(null).length, 0, '31 配置缺失时空链不抛错');
+eq(llm.chainFrom({ apiKey: key('a', 'x') })[0].model, 'glm-4.6v-flash', '31 主配置未写 model 时缺省免费模型');
+// 本地真实配置（gitignored，可能存在）：链首必为免费主路线（若已配置）
+const real31 = llm.buildChain();
+if (real31.length) eq(real31[0].model, 'glm-4.6v-flash', '31 本地真实配置链首=免费主路线');

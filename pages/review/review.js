@@ -92,7 +92,8 @@ Page({
       this.setData({ state: 'noBatch' });
       return;
     }
-    if (rec.reviewsDone >= store.OFFSETS.length) {
+    // R22：十轮完成且池空 = 彻底结业；池非空的批可继续巩固复习（每 7 天一轮的循环也可手动提前）
+    if (rec.reviewsDone >= store.OFFSETS.length && rec.wrongPool.length === 0) {
       this.setData({ state: 'manualDone' });
       return;
     }
@@ -119,10 +120,11 @@ Page({
   },
 
   // R16-A 当日快测（学习页入口）：整批自测巩固。
-  // 不写复习记录、不动遗忘池、不推进复习次数——初记只求脸熟，可反复做
+  // 不写复习记录、不推进复习次数（R22 修订：标忘的词随结束落遗忘池进错词本）
   initStudy: function (batchId) {
     this.mode = 'study';
     this.studyBatchId = batchId;
+    this.studyForgotMap = {}; // 本轮标忘的词（落池依据；重测答对不撤回）
     const rec = store.getRecords().find(function (r) { return r.batchId === batchId; });
     if (!rec) {
       this.setData({ state: 'noBatch' });
@@ -163,6 +165,7 @@ Page({
       petEmoji: store.getPetInfo().emoji // R12：答对鼓励语带宠物
     });
     this.updateExitGuard();
+    this.autoSpeakCurrent(); // 出词即读：首词自动读英文
   },
 
   // R19 退出保护：复习进行中（非快测）开启系统返回询问——复习提交是全有或全无，
@@ -181,14 +184,18 @@ Page({
     wx.enableAlertBeforeUnload({ message: msg, fail: function () {} });
   },
 
-  // 该词所属批次本次是第几次复习（1~10）；自由复习无轮次概念
+  // 该词所属批次本次复习的轮次文案（1~10 次；>10 为 R22 巩固轮）；自由复习无轮次概念
   roundOf: function (batchNo) {
-    if (this.mode === 'free') return '-';
+    if (this.mode === 'free') return '自由复习';
     const due = (this.session && this.session.due) || [];
     for (let i = 0; i < due.length; i++) {
-      if (due[i].batchNo === batchNo) return due[i].reviewsDone + 1;
+      if (due[i].batchNo === batchNo) {
+        return due[i].reviewsDone >= store.OFFSETS.length
+          ? '巩固复习'
+          : '第 ' + (due[i].reviewsDone + 1) + ' 次复习';
+      }
     }
-    return '-';
+    return '复习';
   },
 
   onReveal: function () {
@@ -212,6 +219,13 @@ Page({
     if (c) tts.speakPair(c.word, c.meaning, 1, 800);
   },
 
+  // 出词即读：卡片出新词自动读一遍英文（只读英文，不剧透待回忆的中文释义；
+  // 列表视图自控节奏不触发；点词 readCurrent 重读英+中不受影响）
+  autoSpeakCurrent: function () {
+    const c = this.data.current;
+    if (c && this.data.view === 'card') tts.speak(c.word, 'en_US');
+  },
+
   onRemember: function () {
     this.answer(false);
   },
@@ -227,11 +241,10 @@ Page({
     if (forgot) forgotMap[cur.word] = true;
     else delete forgotMap[cur.word];
 
-    // 答对且该词在错词本：复习结束时会自动移出（auto/manual 由 finishReview 处理，free 由 finishFreeReview），即时提示
-    // 快测不碰错词本（当日新学词不该在池中，防御性跳过）
-    if (!forgot && this.mode !== 'study' && store.inWrongPool(cur.word)) {
-      wx.showToast({ title: '已移出错词本', icon: 'none', duration: 800 });
-    }
+    // R22：快测标忘 = 「未掌握」登记，结束随批落池进错词本（重测答对不撤回，解除走
+    // 错词本统一出口）。正式/自由复习不再提前提示移出——实际移出发生在提交时且
+    // 只清本会话批次，提前提示会失真；结果页按实际移出数展示。
+    if (forgot && this.mode === 'study') this.studyForgotMap[cur.word] = true;
     this.setData({
       forgotMap: forgotMap,
       forgotCount: Object.keys(forgotMap).length,
@@ -269,6 +282,7 @@ Page({
         progress: Math.round(next / this.data.items.length * 100)
       });
       this.updateExitGuard(); // R19：剩余词数变化，更新返回询问文案
+      this.autoSpeakCurrent(); // 出词即读：下一词自动读英文
     } else {
       this.setData({ feedback: '' });
       this.finish();
@@ -276,11 +290,17 @@ Page({
   },
 
   finish: function () {
+    let removedWrong = 0; // 本次实际移出错词本的词数（结果页如实展示）
+    let studyMarked = 0;  // 快测标忘落池的词数
     if (this.mode === 'free') {
-      store.finishFreeReview(this.session, this.data.forgotMap);
-    } else if (this.mode !== 'study') {
-      // 快测不落任何存储（纯巩固，不推进复习进度）
-      store.finishReview(this.session, this.data.forgotMap);
+      removedWrong = store.finishFreeReview(this.session, this.data.forgotMap);
+    } else if (this.mode === 'study') {
+      // R22：快测不推进复习轮次，但标忘的词落该批遗忘池（进错词本，幂等）
+      const marks = Object.keys(this.studyForgotMap || {});
+      studyMarked = marks.length;
+      if (marks.length) store.markBatchWordsForgot(this.studyBatchId, marks);
+    } else {
+      removedWrong = store.finishReview(this.session, this.data.forgotMap);
     }
     // R17：结果统计以 forgotMap 为准统一口径（卡片/列表/混用三种路径一致）；
     // 快测沿用 firstPass 口径（列表视图不开放快测，无混用）
@@ -300,7 +320,9 @@ Page({
       progress: 100,
       remembered: remembered,
       forgot: forgot,
-      batchNos: nos.join('、')
+      batchNos: nos.join('、'),
+      removedWrong: removedWrong,
+      studyMarked: studyMarked
     });
     this.updateExitGuard(); // R19：到结果页即已落库，解除返回询问
   },

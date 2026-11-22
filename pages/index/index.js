@@ -36,7 +36,9 @@ Page({
     // R21-B：新单词入口预告（nextBatch 只读推演无副作用：拍照会话优先 → 静态批）
     const nb = store.nextBatch();
     const newPreview = nb
-      ? (nb.photo ? '📷 先学拍照批 · ' + nb.words.length + ' 词' : '第 ' + nb.batchNo + ' 批 · ' + nb.words.length + ' 词')
+      ? (nb.photo
+          ? (nb.manual ? '✏️ 先学手动录入批 · ' : '📷 先学拍照批 · ') + nb.words.length + ' 词'
+          : '第 ' + nb.batchNo + ' 批 · ' + nb.words.length + ' 词')
       : '词库已全部学完 🎉';
     // R21-B：复习排期预告（未来两日到期词数；今天无任务时下一节点兜底）
     const fc = store.getReviewForecast(2).filter(function (e) { return e.days > 0; });
