@@ -76,10 +76,10 @@ s.items.slice(9, 11).forEach(i => forgot3[i.word] = true);
 store.finishReview(s, forgot3);
 eq(store.getRecords()[0].wrongPool.length, 2, '第3次复习再错2词进入遗忘池');
 
-// 第5天（未到第4次节点第4天已过？第4次=+4天即9月5日）
-setDay(2026, 9, 5);
+// 第5天(9/6)：第4次复习（OFFSETS[3]=+5）
+setDay(2026, 9, 6);
 s = store.buildReviewSession();
-eq(s.due.length, 1, '第4天(9/5)第4次复习到期');
+eq(s.due.length, 1, '第5天(9/6)第4次复习到期');
 eq(s.items.length, 2, '第4次只复习遗忘池2词');
 // 答对第1个、忘记第2个 → 遗忘池剩1
 const poolWords = store.getRecords()[0].wrongPool.map(w => w.w);
@@ -89,15 +89,15 @@ store.finishReview(s, forgot4);
 eq(store.getRecords()[0].wrongPool.length, 2, '遗忘词需连续答对2次，首次答对仍保留');
 eq(store.getRecords()[0].reviewsDone, 4, '已完成4次复习');
 
-// 第6天(9/7)：第5次复习，2词
-setDay(2026, 9, 7);
+// 第7天(9/8)：第5次复习，2词
+setDay(2026, 9, 8);
 s = store.buildReviewSession();
 eq(s.items.length, 2, '第5次复习遗忘池2词（待连续答对）');
 store.finishReview(s, {});
 eq(store.getRecords()[0].wrongPool.length, 1, '第5次答对后仍保留待第二次确认的词');
 
-// 遗忘池清空后，第8天(9/9)第6次复习自动完成
-setDay(2026, 9, 9);
+// 遗忘池清空后，第9天(9/10)第6次复习自动完成
+setDay(2026, 9, 10);
 s = store.buildReviewSession();
 eq(s.items.length, 1, '遗忘池仍有待第二次确认的词');
 store.finishReview(s, {});
@@ -107,7 +107,7 @@ eq(store.getRecords()[0].reviewsDone, 6, '空池轮自动计次');
 setDay(2026, 9, 1); // 回到学习日，学第2批（游标35起）
 store.saveLearnedBatch(store.nextBatch()); // 批次2：9/1学习
 
-setDay(2026, 9, 2); // 批次2第1次复习（批次1已完成6次，下次在第11天，不冲突）
+setDay(2026, 9, 2); // 批次2第1次复习（批次1已完成6次，下次在第12天，不冲突）
 s = store.buildReviewSession();
 eq(s.due.filter(d => d.batchNo === 2).length, 1, '批次2当天到期');
 eq(s.items.length, 35, '批次2全部35词');
@@ -860,14 +860,14 @@ eq(acc25.acc, 93, '两轮加权 65/70 → 93');
 eq(acc25.lastAcc, 100, '最近一次全对 → 100');
 eq(acc25.trend, 'up', '同口径（全量轮）86→100 趋势上升');
 
-// 第3轮忘2词入池，第4轮（巩固轮只考遗忘池2词）忘1 → lastAcc=50，
-// 此前无巩固轮 → trend=null（口径分段，不与全量轮比较、不误报退步）
+// 第3轮忘2词入池，第4轮（遗忘轮只考遗忘池2词，+5天）忘1 → lastAcc=50，
+// 此前无遗忘轮 → trend=null（口径分段，不与全量轮比较、不误报退步）
 setDay(2027, 4, 4);
 s25 = store.buildReviewSession();
 const f25c = {};
 s25.items.slice(0, 2).forEach(function (i) { f25c[i.word] = true; });
 store.finishReview(s25, f25c);
-setDay(2027, 4, 5);
+setDay(2027, 4, 6);
 s25 = store.buildReviewSession();
 eq(s25.items.length, 2, '第4轮只考遗忘池2词');
 const pool25 = store.getRecords()[0].wrongPool.map(function (w) { return w.w; });
@@ -878,14 +878,14 @@ acc25 = store.getBatchAccuracy(store.getRecords()[0]);
 eq(acc25.lastAcc, 50, '巩固轮 1/2 → 最近正确率50');
 eq(acc25.trend, null, '口径分段：首次巩固轮趋势null（不与全量轮86/100比较）');
 
-// 25b 排期推演：批1（date 4/1、reviewsDone=4、池1词）+ 新学批2（date 4/5）
-store.saveLearnedBatch(store.nextBatch()); // 静态批2：2027-04-05
-let fc25 = store.getReviewForecast(7);     // 今天=4/5
+// 25b 排期推演：批1（date 4/1、reviewsDone=4、池2词）+ 新学批2（date 4/6）
+store.saveLearnedBatch(store.nextBatch()); // 静态批2：2027-04-06
+let fc25 = store.getReviewForecast(7);     // 今天=4/6
 eq(fc25.length, 2, '排期：两个未来节点');
-eq(fc25[0].date, '2027-04-06', '批2第1轮在4/6（全量轮）');
+eq(fc25[0].date, '2027-04-07', '批2第1轮在4/7（全量轮）');
 eq(fc25[0].words, 35, '批2到期词数=全量35');
 eq(fc25[0].overdue, false, '未逾期');
-eq(fc25[1].date, '2027-04-07', '批1第5轮在4/7');
+eq(fc25[1].date, '2027-04-08', '批1第5轮在4/8');
 eq(fc25[1].words, 2, '批1到期词数=遗忘池2词（巩固轮口径）');
 
 // 逾期：两批节点均已过 → 归入今天并标 overdue，同日聚合
@@ -1349,3 +1349,116 @@ eq(llm.chainFrom({ apiKey: key('a', 'x') })[0].model, 'glm-4.6v-flash', '31 主�
 // 本地真实配置（gitignored，可能存在）：链首必为免费主路线（若已配置）
 const real31 = llm.buildChain();
 if (real31.length) eq(real31[0].model, 'glm-4.6v-flash', '31 本地真实配置链首=免费主路线');
+
+// ---- 场景32（R23）：词库页分类与首页统计同源同口径 ----
+// 直接铺两批记录：批1 十轮完成且池空（毕业）；批2 十轮完成但池中1词（R22 巩固中）。
+// 验证 getBankEntries.mastered / 分类计数与 getStats 完全一致（首页四格 → 词库页 chips）。
+setDay(2026, 11, 23);
+storage.vocab_account = 'junior';
+storage.vocab_deleted_junior = [];       // 清软删与队列，本场景只看静态库口径
+storage.vocab_photo_words_junior = [];
+const bk32 = store.currentBank();
+storage.vocab_records_junior = [
+  { batchId: 'b32-1', batchNo: 1, date: '2026-09-01', start: 0, end: 2,
+    words: bk32.slice(0, 3), reviewsDone: 10, wrongPool: [], correctStreak: {},
+    reviewHistory: [{ date: '2026-09-22', round: 10, total: 3, wrong: 0 }] },
+  { batchId: 'b32-2', batchNo: 2, date: '2026-09-05', start: 3, end: 5,
+    words: bk32.slice(3, 6), reviewsDone: 10, wrongPool: [bk32[5]], correctStreak: {},
+    reviewHistory: [{ date: '2026-09-26', round: 10, total: 3, wrong: 1 }] }
+];
+const st32 = store.getStats();
+eq([st32.learned, st32.learning, st32.mastered], [6, 3, 3], '32 统计：6学/3复习中/3掌握');
+const e32 = {};
+store.getBankEntries().forEach(function (x) { e32[x.w] = x; });
+eq([e32[bk32[0].w].learned, e32[bk32[0].w].mastered], [true, true], '32 十轮+池空批的词 mastered=true');
+eq([e32[bk32[4].w].learned, e32[bk32[4].w].mastered], [true, false], '32 同批池未空：批内其余词也未毕业（复习中）');
+eq(e32[bk32[5].w].mastered, false, '32 遗忘池中的词不算已掌握');
+eq(e32[bk32[6].w].learned, false, '32 未学词 learned=false');
+// chips 计数（页面按 entries 现算）与 getStats 完全一致 = 单一分类来源
+let cl32 = 0, cg32 = 0, cm32 = 0;
+store.getBankEntries().forEach(function (x) {
+  if (!x.learned) return;
+  cl32++;
+  if (x.mastered) cm32++; else cg32++;
+});
+eq([cl32, cg32, cm32], [st32.learned, st32.learning, st32.mastered], '32 词库页 chips 计数=首页统计（同源）');
+// 批2 池非空产生巩固任务（「复习中」口径的调度面：毕业不只看轮数）
+setDay(2026, 10, 3);
+eq(store.getDueBatches().length, 1, '32 批2 到巩固节点产生任务，批1 池空无任务');
+
+// ---- 场景33（R24）：新复习间隔 + 今日任务三态 + 并行批次进度推演 ----
+eq(store.OFFSETS, [1, 2, 3, 5, 7, 9, 12, 14, 17, 21], '33 新间隔生效（第4~9轮各推后1天，第10轮仍21天）');
+
+// 干净环境：2026-11-23 学批1
+setDay(2026, 11, 23);
+storage.vocab_records_junior = []; storage.vocab_cursor_junior = 0;
+storage.vocab_photo_words_junior = [];
+storage.vocab_photo_sessions_junior = [];
+storage.vocab_deleted_junior = [];
+// 33a 学习日（未学前）：todo，任务=新学（当天无复习）
+let m33 = store.getTodayMission();
+eq([m33.state, m33.hasReview, m33.hasNew, m33.newWords, m33.newBatchNo, m33.estMin],
+  ['todo', false, true, 35, 1, 10], '33a 学习日未学：todo，仅新学35词，预计10分钟');
+store.saveLearnedBatch(store.nextBatch());
+// 学完当批 → done（当天已学不再推新学）+ 明日预告
+m33 = store.getTodayMission();
+eq([m33.state, m33.hasReview, m33.hasNew, m33.learnedToday, m33.reviewedToday],
+  ['done', false, false, true, false], '33a 学完当批当天 → done');
+eq([m33.tomorrow.batchNo, m33.tomorrow.round, m33.tomorrow.date, m33.tomorrow.words],
+  [1, 1, '2026-11-24', 35], '33a 明日预告=批1第1轮');
+
+// 33b 次日（11-24）：批1第1轮到期 + 新批可学（复习+新学并存）
+setDay(2026, 11, 24);
+m33 = store.getTodayMission();
+eq([m33.state, m33.hasReview, m33.reviewWords, m33.hasNew, m33.newWords, m33.newBatchNo, m33.estMin],
+  ['todo', true, 35, true, 35, 2, 15], '33b 次日：todo，复习35+新学35，预计15分钟');
+// 做完复习再学批2 → done 态 + 明日预告
+const s33 = store.buildReviewSession();
+store.finishReview(s33, {});
+store.saveLearnedBatch(store.nextBatch()); // 批2：2026-11-24 学
+m33 = store.getTodayMission();
+eq([m33.state, m33.hasReview, m33.hasNew, m33.reviewedToday, m33.learnedToday],
+  ['done', false, false, true, true], '33b 复习+新学都完成 → done（当天已学批不再推新学）');
+eq([m33.tomorrow.batchNo, m33.tomorrow.date, m33.tomorrow.days, m33.tomorrow.round, m33.tomorrow.words],
+  [1, '2026-11-25', 1, 2, 35], '33b 明日预告=批1第2轮（同日多批取首个到期批）');
+
+// 33c 并行进度：2 批并行，dayN/毕业日/时间线
+const pb33 = store.getParallelBatches();
+eq([pb33.activeCount, pb33.graduated.length], [2, 0], '33c 2批并行、无毕业批');
+const b1_33 = pb33.active[0];
+eq([b1_33.batchNo, b1_33.date, b1_33.dayN, b1_33.state, b1_33.reviewsDone],
+  [1, '2026-11-23', 2, 'learning', 1], '33c 批1：第2天、learning、已复习1轮');
+eq([b1_33.nextRound, b1_33.nextDate, b1_33.nextWords, b1_33.finalDate],
+  [2, '2026-11-25', 35, '2026-12-14'], '33c 批1：下轮11-25考35词，毕业日=学习日+21');
+eq(b1_33.timeline[0],
+  { round: 1, planDate: '2026-11-24', doneDate: '2026-11-24', status: 'done', cons: false },
+  '33c 批1第1轮：已完成（实际日期）');
+eq([b1_33.timeline[1].planDate, b1_33.timeline[1].status], ['2026-11-25', 'future'], '33c 批1第2轮：future');
+eq([b1_33.timeline[9].round, b1_33.timeline[9].planDate], [10, '2026-12-14'], '33c 时间线共10轮，末轮=毕业日');
+const b2_33 = pb33.active[1];
+eq([b2_33.dayN, b2_33.nextDate, b2_33.finalDate], [1, '2026-11-25', '2026-12-15'], '33c 批2：当天第1天，下轮与毕业日各晚一天');
+
+// 33d 逾期标记：11-26 两批的 11-25 节点均未做
+setDay(2026, 11, 26);
+const pb33b = store.getParallelBatches();
+eq(pb33b.active[0].timeline[1].status, 'overdue', '33d 批1第2轮逾期');
+eq([pb33b.active[0].nextOverdueDays, pb33b.active[0].nextDueToday], [1, true], '33d 逾期1天、节点已到');
+m33 = store.getTodayMission();
+eq([m33.state, m33.hasReview, m33.reviewWords], ['todo', true, 70], '33d 逾期合并：两批70词今日待复习');
+
+// 33e 全部毕业：库尽 + 十轮完成池空 → graduated
+storage.vocab_cursor_junior = store.currentBank().length; // 静态词全部出批（游标到尾）
+const g33 = store.getRecords();
+g33.forEach(function (r) {
+  r.reviewsDone = 10;
+  r.wrongPool = [];
+  r.reviewHistory = [{ date: '2026-11-20', round: 10, total: 35, wrong: 0, forgot: [] }];
+});
+storage.vocab_records_junior = g33;
+m33 = store.getTodayMission();
+eq(m33.state, 'graduated', '33e 无可学新批且无任何节点 → graduated');
+eq(store.getParallelBatches().activeCount, 0, '33e 并行批清零');
+eq(store.getParallelBatches().graduated.length, 2, '33e 两批全部毕业归组');
+const g33t = store.getParallelBatches().graduated[0].timeline[9];
+eq([g33t.status, g33t.doneDate], ['done', '2026-11-20'], '33e 毕业批末轮 done=实际完成日');
+

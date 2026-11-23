@@ -37,13 +37,17 @@ Page({
     calYear: 0,
     calMonth: 0,
     calCells: [],
+    // R24 今日学习一键流：结果页/自动完成页的「继续学新词」衔接按钮
+    todayNext: false,
     // 拓展弹层（R10）
     linkShow: false,
     link: { w: '', p: '', m: '', loading: false, ok: false, rels: [], synos: [], sents: [] }
   },
   session: null,
+  todayMode: false, // R24 今日学习一键流：复习完衔接进新单词页
 
   onLoad: function (options) {
+    this.todayMode = !!(options && options.today); // R24：?today=1 由首页 Hero 进入
     if (options && options.study && options.batchId) {
       this.initStudy(options.batchId);
     } else if (options && options.free) {
@@ -55,6 +59,17 @@ Page({
     }
   },
 
+  // R24 今日模式下是否衔接学新词：当天还没学过新批且有待出批（每天建议一批）
+  canTodayNew: function () {
+    if (!this.todayMode) return false;
+    const today = store.todayStr();
+    const learnedToday = store.getRecords().some(function (r) { return r.date === today; });
+    return !learnedToday && !!store.nextBatch();
+  },
+  goTodayNew: function () {
+    wx.redirectTo({ url: '/pages/new/new' });
+  },
+
   // 首页/复习入口：今日到期的批次（自动合并）
   initAuto: function () {
     this.mode = 'auto';
@@ -62,6 +77,11 @@ Page({
     this.session = session;
 
     if (session.due.length === 0) {
+      // R24 今日模式兜底：到期任务消失（如切过账号）且还可学新 → 直接衔接新单词
+      if (this.canTodayNew()) {
+        wx.redirectTo({ url: '/pages/new/new' });
+        return;
+      }
       // 没有到期任务 → 复习中心（R21-D：看板 + 未来排期条 + 正确率走势 + 巩固直达）
       this.setData({
         state: 'empty',
@@ -78,7 +98,7 @@ Page({
     if (session.items.length === 0) {
       // 到期批次的遗忘池都为空：本轮复习自动完成
       store.finishReview(session, {});
-      this.setData({ state: 'autoDone' });
+      this.setData({ state: 'autoDone', todayNext: this.canTodayNew() });
       return;
     }
     this.startQuiz(session);
@@ -322,7 +342,8 @@ Page({
       forgot: forgot,
       batchNos: nos.join('、'),
       removedWrong: removedWrong,
-      studyMarked: studyMarked
+      studyMarked: studyMarked,
+      todayNext: this.canTodayNew() // R24 今日模式：结果页主按钮换成「继续学新词」
     });
     this.updateExitGuard(); // R19：到结果页即已落库，解除返回询问
   },

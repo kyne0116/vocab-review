@@ -7,6 +7,20 @@
 }
 .head-title { font-size: 36rpx; font-weight: bold; }
 .head-info { margin-top: 8rpx; }
+
+/* R23 分类筛选 chips（口径与首页统计同源；四格等宽，计数随分类实时变化） */
+.chips { display: flex; margin-top: 20rpx; }
+.chip {
+  flex: 1;
+  text-align: center;
+  font-size: 22rpx;
+  color: #666;
+  background: #f6f7f9;
+  border-radius: 24rpx;
+  padding: 10rpx 0;
+}
+.chip + .chip { margin-left: 12rpx; }
+.chip.on { background: #eefaf2; color: #07c160; font-weight: 600; }
 .manage-btn {
   color: #07c160;
   font-size: 28rpx;

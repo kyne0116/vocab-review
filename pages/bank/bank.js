@@ -1,24 +1,43 @@
 // 词库页（R09）：浏览/搜索当前账号词库，全账号支持删除（R09-2）
 // （行内「删除」单删 + 勾选批量删）。删除走 store.removeWords 联动清理：
 // 已学词同步移出复习批次与错词本；静态词库为软删除（vocab_deleted_<账号>）。
+// R23：首页统计四格经 filter 参数进入分类视图（learned/learning/mastered，缺省全部），
+// 页内 chips 可互切；分类口径与首页统计同源（getBankEntries.mastered）。
 const store = require('../../utils/store.js');
 const tts = require('../../utils/tts.js');
 
 const PAGE_SIZE = 100; // 大词库（3400+ 词）分屏渲染，触底续载
 
+// 分类空态文案（icon / 标题 / 说明）
+const EMPTY_BY_FILTER = {
+  learned: ['📖', '还没有学过的单词', '去首页学一批新单词，学完就会出现在这里'],
+  learning: ['🔁', '没有复习中的单词', '学过一批词之后，它们会在这里等待复习'],
+  mastered: ['🎓', '还没有毕业的单词', '完成十轮复习且无错词的词，会毕业到这里']
+};
+
 Page({
   data: {
     accName: '',
     keyword: '',
-    items: [],         // 完整过滤结果 [{ w, m, p, learned, done, statusText, photo, sel }]
+    filter: '',        // R23 分类筛选：''|learned|learning|mastered
+    items: [],         // 完整过滤结果 [{ w, m, p, learned, mastered, statusText, photo, sel }]
     viewItems: [],     // 当前渲染的截段子集（items.slice(0, limit)）
     shownCount: 0,
     total: 0,
-    learnedCount: 0,
-    pendingCount: 0,
+    cntLearned: 0,     // R23 chips 计数（与首页统计同源）
+    cntLearning: 0,
+    cntMastered: 0,
+    emptyIcon: '',
+    emptyTitle: '',
+    emptySub: '',
     manageMode: false,
     selCount: 0,
     allSel: false
+  },
+
+  onLoad: function (options) {
+    const f = options && options.filter;
+    this.setData({ filter: ['learned', 'learning', 'mastered'].indexOf(f) !== -1 ? f : '' });
   },
 
   onShow: function () {
@@ -32,33 +51,59 @@ Page({
     const sel = this._sel;
     const kw = (this.data.keyword || '').trim().toLowerCase();
     const entries = store.getBankEntries(); // 静态教材顺序 + 拍照词附后（R14）
+    // R23：分类计数（chips 用；learned ⊇ learning+mastered）
+    let cntLearned = 0, cntLearning = 0, cntMastered = 0;
+    entries.forEach(function (x) {
+      if (!x.learned) return;
+      cntLearned++;
+      if (x.mastered) cntMastered++; else cntLearning++;
+    });
+    const f = this.data.filter;
     const matched = entries.filter(function (x) {
+      if (f === 'learned') return x.learned;
+      if (f === 'learning') return x.learned && !x.mastered;
+      if (f === 'mastered') return x.mastered;
+      return true;
+    }).filter(function (x) {
       return !kw || x.w.toLowerCase().indexOf(kw) !== -1 || (x.m || '').indexOf(kw) !== -1;
     });
     const items = matched.map(function (x) {
       return {
         w: x.w, m: x.m, p: x.p,
         learned: x.learned,
-        done: x.done,
+        mastered: x.mastered,
         photo: !!x.photo,
         manual: !!x.manual,
-        statusText: x.learned ? ('第' + x.batchNo + '批·' + (x.done ? '已完成' : '复习中')) : '待学习',
+        statusText: x.learned ? ('第' + x.batchNo + '批·' + (x.mastered ? '已掌握' : '复习中')) : '待学习',
         sel: !!sel[x.w]
       };
     });
     const viewItems = items.slice(0, this._limit);
     const selCount = items.filter(function (x) { return x.sel; }).length;
-    const learnedCount = entries.filter(function (x) { return x.learned; }).length;
+    const emptyCfg = (items.length === 0 && EMPTY_BY_FILTER[f]) || [];
     this.setData({
       items: items,
       viewItems: viewItems,
       shownCount: viewItems.length,
       total: entries.length,
-      learnedCount: learnedCount,
-      pendingCount: entries.length - learnedCount,
+      cntLearned: cntLearned,
+      cntLearning: cntLearning,
+      cntMastered: cntMastered,
+      emptyIcon: emptyCfg[0] || '',
+      emptyTitle: emptyCfg[1] || '',
+      emptySub: emptyCfg[2] || '',
       selCount: selCount,
       allSel: items.length > 0 && selCount === items.length
     });
+  },
+
+  // R23：切换分类 chips（搜索词保留，在新分类内继续过滤）
+  switchFilter: function (e) {
+    const f = e.currentTarget.dataset.f || '';
+    if (f === this.data.filter) return;
+    this.setData({ filter: f });
+    this._limit = PAGE_SIZE;
+    this.refresh();
   },
 
   // 触底续载（大词库分屏渲染）

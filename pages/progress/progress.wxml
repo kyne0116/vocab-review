@@ -1,0 +1,72 @@
+<view class="container">
+  <!-- 四格统计（R23 口径，自首页迁移；可点入词库页分类清单） -->
+  <view class="card stats">
+    <view class="stats-row">
+      <view class="stats-item tappable" bindtap="goBankList" data-cat="learned">
+        <view class="stats-num">{{learned}}</view>
+        <view class="stats-label">已学单词 ▸</view>
+        <view class="stats-hint">已进入复习流程</view>
+      </view>
+      <view class="stats-item tappable" bindtap="goBankList" data-cat="">
+        <view class="stats-num">{{totalWords}}</view>
+        <view class="stats-label">词库总量 ▸</view>
+        <view class="stats-hint">教材＋拍照/手录</view>
+      </view>
+    </view>
+    <view class="stats-row">
+      <view class="stats-item tappable" bindtap="goBankList" data-cat="learning">
+        <view class="stats-num">{{learning}}</view><view class="stats-label">复习中 ▸</view><view class="stats-hint">十轮未满或含错词</view>
+      </view>
+      <view class="stats-item tappable" bindtap="goBankList" data-cat="mastered">
+        <view class="stats-num">{{mastered}}</view><view class="stats-label">已掌握 ▸</view><view class="stats-hint">十轮全过无错词</view>
+      </view>
+    </view>
+    <view class="stats-tip">{{statsTip}}</view>
+  </view>
+
+  <!-- 在学批次：并行 N 批，每批十轮时间线 -->
+  <view class="card sec-head-card" wx:if="{{activeCount > 0}}">
+    <view class="sec-title">📖 在学批次</view>
+    <view class="sec-sub">并行 {{activeCount}} 批 · 十轮复习时间线</view>
+  </view>
+
+  <view class="card batch-card" wx:for="{{batches}}" wx:key="batchNo" wx:for-item="b">
+    <view class="batch-head">
+      <view class="batch-title">第 {{b.batchNo}} 批<text class="batch-count">{{b.count}} 词</text></view>
+      <view class="batch-chip {{b.consolidating ? 'cons' : ''}}">{{b.consolidating ? '巩固中' : '十轮进行中'}}</view>
+    </view>
+    <view class="batch-meta">学于 {{b.dateShort}} · 今天第 {{b.dayN}} 天<text wx:if="{{b.wrongCount > 0}}"> · 池中 {{b.wrongCount}} 词</text></view>
+    <view class="batch-bar"><view class="batch-bar-fill {{b.consolidating ? 'cons' : ''}}" style="width: {{b.pct}}%;"></view></view>
+    <view class="batch-next {{b.nextOverdue ? 'od' : ''}}">{{b.nextLine}}</view>
+    <view class="batch-final">🎓 毕业日 {{b.finalShort}}（第 10 轮计划日）</view>
+
+    <!-- 十轮时间线：✅实际完成日 / ⬜计划日 / 🔴逾期 / 末轮毕业标 -->
+    <view class="tl">
+      <view class="tl-cell {{c.status}} {{c.cons ? 'cons' : ''}}" wx:for="{{b.cells}}" wx:for-item="c" wx:key="round">
+        <view class="tl-round">{{c.cons ? '巩' : (c.isFinal ? '🎓' : c.round)}}</view>
+        <view class="tl-date">{{c.dateShort}}</view>
+        <view class="tl-flag">{{c.status === 'overdue' ? '逾期' : (c.status === 'today' ? '今日' : (c.status === 'done' ? '完成' : ''))}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 无在学批时的空态引导 -->
+  <view class="card empty-card" wx:if="{{activeCount === 0 && graduatedCount > 0}}">
+    <view class="empty-emoji">🎉</view>
+    <view class="empty-text">当前没有进行中的批次，全部毕业！</view>
+  </view>
+
+  <!-- 毕业批（默认折叠） -->
+  <view class="card grad-card" wx:if="{{graduatedCount > 0}}">
+    <view class="grad-head" bindtap="toggleGraduated">
+      <view class="grad-title">🎓 已毕业 {{graduatedCount}} 批</view>
+      <view class="grad-toggle">{{showGraduated ? '收起 ▴' : '展开 ▾'}}</view>
+    </view>
+    <block wx:if="{{showGraduated}}">
+      <view class="grad-row" wx:for="{{graduatedRows}}" wx:key="batchNo" wx:for-item="g">
+        <view class="grad-left">第 {{g.batchNo}} 批 · {{g.count}} 词 · 学于 {{g.dateShort}}</view>
+        <view class="grad-date">{{g.gradShort}} 毕业</view>
+      </view>
+    </block>
+  </view>
+</view>

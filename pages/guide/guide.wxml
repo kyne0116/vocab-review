@@ -1,10 +1,10 @@
 ﻿<view class="guide page">
   <view class="hero"><text class="hero-icon">🚀</text><view><view class="hero-title">启航成长记</view><view class="hero-sub">每天一点点，陪孩子学会更多词</view></view></view>
   <view class="step card"><text class="step-icon">👨‍👩‍👧</text><view><view class="step-title">1. 选对学习账号</view><view class="step-text">在首页底部家庭榜点按小学或初中账号即可切换。每个账号的词库、进度、复习和错词本彼此独立。</view></view></view>
-  <view class="step card"><text class="step-icon">📖</text><view><view class="step-title">2. 先学一批新词</view><view class="step-text">点击“新单词”，按顺序学习当前批次；拍照收词后，照片中的词会优先出现。学完确认后才会进入复习安排。</view></view></view>
-  <view class="step card"><text class="step-icon">🔁</text><view><view class="step-title">3. 到期先复习</view><view class="step-text">首页出现到期提醒时先点“复习”。每批安排 10 轮；正式复习先回忆，再查看释义，最后选择“记得”或“忘记”。遗忘词连续答对两次才会移出错词本。</view></view></view>
+  <view class="step card"><text class="step-icon">📖</text><view><view class="step-title">2. 每天点「开始今日学习」</view><view class="step-text">首页绿色大卡会列出今天的任务：先带你有到期复习的批次，复习完自动衔接学一批新词（拍照收词后照片中的词优先出批）。每天学一批、复习一批，20 分钟左右。</view></view></view>
+  <view class="step card"><text class="step-icon">🔁</text><view><view class="step-title">3. 坚持完成 10 轮复习</view><view class="step-text">每批安排 10 轮；正式复习先回忆，再查看释义，最后选择“记得”或“忘记”。遗忘词连续答对两次才会移出错词本。首页「学习进度」卡能看到每批进行到第几轮、哪天毕业。</view></view></view>
   <view class="step card"><text class="step-icon">✍️</text><view><view class="step-title">4. 用默写加强回忆</view><view class="step-text">学习模式中可进入“默写模式”，看中文拼写英文。刚学完也可做“当日快测”，它只用于当天巩固，不改变正式复习进度。</view></view></view>
   <view class="step card"><text class="step-icon">📷</text><view><view class="step-title">5. 需要时拍照收词</view><view class="step-text">拍课本或练习册，检查识别出的英文、修改错误拼写，再确认释义后收录。网络不可用时会尝试本机识别。</view></view></view>
   <view class="step card"><text class="step-icon">🐣</text><view><view class="step-title">6. 看懂学习反馈</view><view class="step-text">“已学”表示进入过学习记录，“复习中”表示尚未完成 10 轮，“已掌握”表示完成 10 轮且当前没有遗忘词。错词本和教材总览告诉你下一步该巩固什么。</view></view></view>
-  <view class="reset-tip">想从头开始？回到首页底部点击“一键初始化”。v1.0.3</view>
+  <view class="reset-tip">想从头开始？回到首页底部点击“一键初始化”。v1.0.4</view>
 </view>

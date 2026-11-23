@@ -125,6 +125,7 @@
     <view class="empty-icon">👍</view>
     <view>本周期的遗忘词为空，已自动完成</view>
     <view class="text-muted" style="margin-top:12rpx;">前几轮没有答错的单词，无需复习</view>
+    <button class="btn-primary" style="margin-top:30rpx;" wx:if="{{todayNext}}" bindtap="goTodayNew">继续 · 学新单词 ▸</button>
   </view>
 
   <!-- 复习进行中 -->
@@ -219,7 +220,11 @@
       <button class="btn-primary" bindtap="restartStudy">再测一遍</button>
       <button class="btn-plain" style="margin-top:20rpx;" bindtap="goBack">返回</button>
     </block>
-    <button wx:else class="btn-primary" bindtap="goBack">返回首页</button>
+    <block wx:else>
+      <button wx:if="{{todayNext}}" class="btn-primary" bindtap="goTodayNew">继续 · 学新单词 ▸</button>
+      <button wx:else class="btn-primary" bindtap="goBack">返回首页</button>
+      <button wx:if="{{todayNext}}" class="btn-plain" style="margin-top:20rpx;" bindtap="goBack">返回首页</button>
+    </block>
   </block>
 
   <!-- 拓展弹层（R10）：衍生词 / 近义词 / 双语例句 -->

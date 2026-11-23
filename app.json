@@ -11,6 +11,7 @@
     "pages/bank/bank",
     "pages/spell/spell"
     ,"pages/guide/guide"
+    ,"pages/progress/progress"
   ],
   "window": {
     "navigationBarBackgroundColor": "#07c160",

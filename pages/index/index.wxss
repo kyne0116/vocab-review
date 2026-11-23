@@ -1,9 +1,9 @@
-/* ============ R18 首页改版 ============ */
-/* 结构：头部卡（口号+账号+streak+切换提示）→ 到期条（仅有任务）→ 新单词/复习 →
-   宠物卡 → 拍照收词/错词本 → 教材进度/统计 → 家庭榜（唯一切换账号入口）。
-   视范：字号五档 40 / 34 / 30 / 26 / 22；卡片强调统一为左色条；动画只做入场一次。 */
+/* ============ R24 首页改版：任务流首页 ============ */
+/* 结构：头部卡 → Hero 今日学习（唯一主行动，三态）→ 学习进度卡（并行批次）→
+   宠物+拍照收词并排 → 家庭榜（唯一切换账号入口）→ 工具格 → 一键初始化（弱化）。
+   规范：字号五档 40 / 34 / 30 / 26 / 22；卡片强调统一为左色条；动画只做入场一次。 */
 
-/* ---- 头部卡（原 hero + 账号卡合并，零顶部留白） ---- */
+/* ---- 头部卡（R18 保留精简） ---- */
 .head { margin-bottom: 24rpx; }
 .head-top {
   display: flex;
@@ -74,176 +74,178 @@
 }
 .head-switch { color: #576b95; font-size: 26rpx; flex-shrink: 0; }
 
-/* ---- 到期复习引导条（R16-B，R18 起紧随头部卡；入场动画仅一次，不做常驻脉冲） ---- */
-.due-banner {
-  display: flex;
-  align-items: center;
-  background: #fff7e6;
-  border: 2rpx solid #f59a23;
-  border-radius: 20rpx;
-  padding: 24rpx 28rpx;
+/* ---- R24 Hero：今日学习主卡（三态） ---- */
+.hero {
+  background: linear-gradient(135deg, #07c160 0%, #05a552 100%);
+  border-radius: 24rpx;
+  padding: 44rpx 36rpx 36rpx;
   margin-bottom: 24rpx;
-  box-shadow: 0 4rpx 16rpx rgba(245, 154, 35, 0.18);
-  animation: dueIn .36s ease-out;
+  color: #fff;
+  box-shadow: 0 8rpx 28rpx rgba(7, 193, 96, 0.32);
+  animation: heroIn .36s ease-out;
 }
-@keyframes dueIn {
+@keyframes heroIn {
   from { opacity: 0; transform: translateY(-14rpx); }
   to { opacity: 1; transform: translateY(0); }
 }
-.due-banner-icon { font-size: 48rpx; margin-right: 22rpx; flex-shrink: 0; }
-.due-banner-main { flex: 1; min-width: 0; }
-.due-banner-title { color: #b96a00; font-size: 30rpx; font-weight: 600; }
-.due-banner-sub { color: #d98c1f; font-size: 26rpx; margin-top: 6rpx; }
-.due-banner-fc { color: #d98c1f; font-size: 22rpx; margin-top: 4rpx; opacity: .85; }
-.due-banner-go { color: #f59a23; font-size: 34rpx; font-weight: bold; flex-shrink: 0; }
-
-/* ---- 新单词 / 复习 主按钮 ---- */
-.menu {
-  display: flex;
-  gap: 24rpx;
-  margin-bottom: 24rpx;
-}
-.menu-btn {
-  flex: 1;
-  background: #fff;
-  border-radius: 20rpx;
-  padding: 40rpx 20rpx;
-  text-align: center;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
-}
-.menu-btn.new { border-left: 8rpx solid #07c160; }
-.menu-btn.review { border-left: 8rpx solid #f59a23; }
-.menu-icon { font-size: 60rpx; }
-.menu-name { font-size: 34rpx; font-weight: bold; margin-top: 12rpx; }
-.menu-desc { font-size: 26rpx; color: #999; margin-top: 10rpx; }
-/* R21-B：复习按钮排期预告行 + 新单词按钮全书进度微条（与按钮主色一致） */
-.menu-sub { font-size: 22rpx; color: #bbb; margin-top: 8rpx; }
-.menu-bar {
-  height: 10rpx;
-  background: #f0f0f0;
-  border-radius: 6rpx;
-  margin: 18rpx 24rpx 0;
-  overflow: hidden;
-}
-.menu-bar-fill { height: 100%; border-radius: 6rpx; }
-.menu-btn.new .menu-bar-fill { background: #07c160; }
-
-/* ---- R12 宠物卡（啾啾） ---- */
-.pet-card {
+.hero-title { font-size: 40rpx; font-weight: bold; }
+.hero-tasks { margin-top: 22rpx; }
+.hero-task {
   display: flex;
   align-items: center;
-  margin-bottom: 24rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  padding: 6rpx 0;
 }
-.pet-emoji {
-  font-size: 88rpx;
-  line-height: 1;
-  margin-right: 26rpx;
-  flex-shrink: 0;
+.hero-task-icon { margin-right: 12rpx; font-size: 30rpx; }
+.hero-task-sub { font-size: 22rpx; opacity: .8; margin-left: 8rpx; font-weight: 400; }
+.hero-est {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  opacity: .85;
 }
-.pet-emoji.bounce { animation: petJump .6s cubic-bezier(.34, 1.56, .64, 1); }
-@keyframes petJump {
-  0% { transform: translateY(0); }
-  40% { transform: translateY(-24rpx) scale(1.08); }
-  100% { transform: translateY(0); }
+.hero-btn {
+  margin-top: 30rpx;
+  height: 96rpx;
+  border-radius: 48rpx;
+  background: #fff;
+  color: #07c160;
+  font-size: 34rpx;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.pet-main { flex: 1; min-width: 0; }
-.pet-title { font-size: 30rpx; font-weight: 600; }
-.pet-learned { color: #999; font-size: 22rpx; font-weight: 400; margin-left: 12rpx; }
-.pet-bar {
-  height: 16rpx;
-  background: #eee;
+.hero-btn:active { opacity: .88; }
+.hero-btn-play { margin-right: 14rpx; font-size: 28rpx; }
+/* done / graduated 态的次级按钮：白描边样式 */
+.hero-btn.secondary {
+  margin-top: 26rpx;
+  height: 84rpx;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 600;
+  border: 2rpx solid rgba(255, 255, 255, 0.55);
+}
+.hero-cele { font-size: 80rpx; line-height: 1; margin-bottom: 16rpx; }
+.hero-tomorrow { margin-top: 14rpx; font-size: 26rpx; opacity: .9; }
+
+/* ---- R24 学习进度卡：并行批次摘要 ---- */
+.prog-card { margin-bottom: 24rpx; border-left: 8rpx solid #07c160; }
+.prog-head {
+  display: flex;
+  align-items: baseline;
+}
+.prog-title { font-size: 34rpx; font-weight: bold; }
+.prog-count {
+  margin-left: 14rpx;
+  color: #07c160;
+  font-size: 24rpx;
+  font-weight: 600;
+  background: #eefaf2;
+  padding: 4rpx 14rpx;
+  border-radius: 20rpx;
+}
+.prog-go {
+  margin-left: auto;
+  color: #576b95;
+  font-size: 26rpx;
+}
+.prog-row {
+  display: flex;
+  align-items: center;
+  margin-top: 24rpx;
+}
+.prog-row-main { flex: 1; min-width: 0; }
+.prog-row-top {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10rpx;
+}
+.prog-row-batch { font-size: 28rpx; font-weight: 600; color: #333; }
+.prog-row-flag {
+  margin-left: 12rpx;
+  font-size: 20rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 16rpx;
+  background: #eefaf2;
+  color: #07c160;
+  font-weight: 600;
+}
+.prog-row-flag.od { background: #fff0ef; color: #e64340; }
+.prog-row-flag.cons { background: #f1edff; color: #7a5af5; }
+.prog-bar {
+  height: 12rpx;
+  background: #f0f0f0;
   border-radius: 8rpx;
   overflow: hidden;
-  margin: 14rpx 0 10rpx;
 }
-.pet-fill {
+.prog-bar-fill {
   height: 100%;
   background: #07c160;
   border-radius: 8rpx;
   transition: width .32s ease-out;
 }
-.pet-next { color: #999; font-size: 22rpx; }
+.prog-row.od .prog-bar-fill { background: #e64340; }
+.prog-row-side { flex-shrink: 0; margin-left: 20rpx; text-align: right; }
+.prog-day { color: #666; font-size: 24rpx; }
+.prog-final { color: #999; font-size: 22rpx; margin-top: 6rpx; }
 
-/* ---- 拍照收词 / 错词本（工具区） ---- */
-.photo {
+/* ---- R24 宠物 + 拍照收词并排卡 ---- */
+.duo-card {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: stretch;
   margin-bottom: 24rpx;
-  border-left: 8rpx solid #576b95;
 }
-.photo-title { font-size: 34rpx; font-weight: bold; }
-.photo-desc { margin-top: 6rpx; }
-.photo-go { color: #576b95; font-size: 32rpx; }
-
-.wrong {
+.duo-pet {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 24rpx;
-  border-left: 8rpx solid #e64340;
+  padding-right: 24rpx;
 }
-.wrong-title { font-size: 34rpx; font-weight: bold; }
-.wrong-desc { margin-top: 6rpx; }
-.wrong-badge {
-  min-width: 64rpx;
-  text-align: center;
-  background: #fff0ef;
-  color: #e64340;
-  font-size: 30rpx;
-  font-weight: bold;
-  border-radius: 40rpx;
-  padding: 10rpx 20rpx;
+.duo-pet-emoji {
+  font-size: 72rpx;
+  line-height: 1;
+  margin-right: 20rpx;
+  flex-shrink: 0;
 }
-.wrong-badge.has { background: #e64340; color: #fff; }
-
-/* ---- 教材进度（R18：批次点阵移出首页，只留进度条 + 百分比） ---- */
-.progress {
-  margin-bottom: 24rpx;
-  border-left: 8rpx solid #07c160;
+.duo-pet-emoji.bounce { animation: petJump .6s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes petJump {
+  0% { transform: translateY(0); }
+  40% { transform: translateY(-24rpx) scale(1.08); }
+  100% { transform: translateY(0); }
 }
-.progress-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.progress-title { font-size: 34rpx; font-weight: bold; }
-.progress-count { color: #999; font-size: 22rpx; }
-.progress-bar {
-  height: 16rpx;
-  background: #f0f0f0;
-  border-radius: 10rpx;
-  margin-top: 22rpx;
+.duo-pet-main { flex: 1; min-width: 0; }
+.duo-pet-title { font-size: 28rpx; font-weight: 600; }
+.duo-pet-bar {
+  height: 12rpx;
+  background: #eee;
+  border-radius: 8rpx;
   overflow: hidden;
+  margin: 10rpx 0 8rpx;
 }
-.progress-fill { height: 100%; background: #07c160; border-radius: 10rpx; }
-.progress-meta {
+.duo-pet-fill {
+  height: 100%;
+  background: #07c160;
+  border-radius: 8rpx;
+  transition: width .32s ease-out;
+}
+.duo-pet-next { color: #999; font-size: 22rpx; }
+.duo-photo {
+  flex-shrink: 0;
+  width: 176rpx;
+  border-left: 2rpx solid #f2f2f2;
+  padding-left: 24rpx;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  margin-top: 16rpx;
+  justify-content: center;
 }
-.progress-pct { color: #666; font-size: 26rpx; }
-.progress-link { color: #576b95; font-size: 26rpx; }
-
-/* ---- 统计（R18：删「已学批次」） ---- */
-.stats { margin-bottom: 24rpx; }
-.stats-row {
-  display: flex;
-  justify-content: space-around;
-  text-align: center;
-}
-.stats-num { font-size: 40rpx; font-weight: bold; color: #07c160; }
-.stats-label { font-size: 22rpx; color: #999; margin-top: 8rpx; }
-/* 词库总量格：词库页入口（R09），绿色标签区分可点；加 padding 扩大点击热区 */
-.stats-item.tappable { padding: 10rpx 24rpx; }
-.stats-item.tappable .stats-label { color: #07c160; }
-.history-link {
-  margin-top: 30rpx;
-  text-align: center;
-  color: #576b95;
-  font-size: 26rpx;
-}
+.duo-photo-icon { font-size: 52rpx; line-height: 1; }
+.duo-photo-name { font-size: 28rpx; font-weight: 600; margin-top: 10rpx; color: #576b95; }
+.duo-photo-sub { font-size: 20rpx; color: #bbb; margin-top: 4rpx; }
 
 /* ---- R18 家庭榜：名次 + chip 化，唯一切换账号入口 ---- */
 .family-card { margin-bottom: 24rpx; }
@@ -289,8 +291,42 @@
 .family-zero { color: #bbb; font-size: 22rpx; }
 .family-row.me .family-name { color: #07c160; font-weight: 600; }
 
+/* ---- R24 工具格：错词本 / 词库 / 教材总览 / 学习记录 ---- */
+.tools {
+  display: flex;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
+}
+.tool {
+  position: relative;
+  flex: 1;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 30rpx 10rpx 26rpx;
+  text-align: center;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+.tool:active { opacity: .88; }
+.tool-icon { font-size: 48rpx; line-height: 1; }
+.tool-name { font-size: 26rpx; color: #333; margin-top: 12rpx; font-weight: 600; }
+.tool-badge {
+  position: absolute;
+  top: 12rpx;
+  right: 16rpx;
+  min-width: 40rpx;
+  height: 40rpx;
+  line-height: 40rpx;
+  padding: 0 10rpx;
+  border-radius: 20rpx;
+  background: #e64340;
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: bold;
+}
+
+/* ---- 一键初始化（低频危险操作，视觉弱化置底） ---- */
 .account-tools { margin-bottom: 24rpx; }
-.account-tools-title { font-size: 32rpx; font-weight: 600; }
+.account-tools-title { font-size: 30rpx; font-weight: 600; color: #666; }
 .account-tools-sub { color: #999; font-size: 24rpx; margin-top: 8rpx; }
 .account-actions { display: flex; gap: 20rpx; margin-top: 20rpx; }
 .account-action { flex: 1; margin: 0; color: #07c160; background: #eefaf2; font-size: 28rpx; }

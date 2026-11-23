@@ -4,18 +4,16 @@ Page({
   data: {
     accountName: '',
     accountDesc: '',
-    learned: 0,
-    learning: 0,
-    mastered: 0,
-    totalWords: 0,
-    dueCount: 0,
-    todayItems: 0,
-    wrongCount: 0,
-    overviewCount: 0,
-    overviewPct: 0,
     streak: 0,
+    // R24 Hero：今日学习三态（todo / done / graduated）与任务构成
+    mission: null,
+    tomorrowText: '',
+    // R24 学习进度卡：并行批次摘要（最多展示 3 行，点入进度页看时间线明细）
+    activeCount: 0,
+    progressRows: [],
     pet: null,        // R12 宠物养成
     petBounce: false,
+    wrongCount: 0,
     family: [],       // R13 家庭榜
     currentAccountId: ''
   },
@@ -25,55 +23,62 @@ Page({
   },
   refresh: function () {
     const s = store.getStats();
-    const ov = store.getOverview();
-    const pct = ov.totalWords === 0 ? 0 : Math.round(s.learned / ov.totalWords * 100);
+    const m = store.getTodayMission();
     // R18：家庭榜加名次（已按已学词数降序，前三奖牌、其后序号）
     const medals = ['🥇', '🥈', '🥉'];
     const family = store.getAccountsOverview().map(function (f, i) {
       f.rank = i < 3 ? medals[i] : String(i + 1);
       return f;
     });
-    // R21-B：新单词入口预告（nextBatch 只读推演无副作用：拍照会话优先 → 静态批）
-    const nb = store.nextBatch();
-    const newPreview = nb
-      ? (nb.photo
-          ? (nb.manual ? '✏️ 先学手动录入批 · ' : '📷 先学拍照批 · ') + nb.words.length + ' 词'
-          : '第 ' + nb.batchNo + ' 批 · ' + nb.words.length + ' 词')
-      : '词库已全部学完 🎉';
-    // R21-B：复习排期预告（未来两日到期词数；今天无任务时下一节点兜底）
-    const fc = store.getReviewForecast(2).filter(function (e) { return e.days > 0; });
-    const forecastText = fc.map(function (e) {
-      return (e.days === 1 ? '明天 ' : '后天 ') + e.words + ' 词';
-    }).join(' · ');
-    let reviewDesc;
-    if (s.todayItems > 0) {
-      reviewDesc = '今天待复习 ' + s.todayItems + ' 词';
-    } else if (fc.length) {
-      reviewDesc = (fc[0].days === 1 ? '明天' : '后天') + '有 ' + fc[0].words + ' 词到期';
-    } else {
-      const nd = store.getNextDueInfo();
-      reviewDesc = nd ? nd.days + ' 天后有复习任务' : '复习任务已全部完成 🎉';
+    // R24 明日预告文案：明天/后天/N天后 · 第X批第N轮（>10 为巩固轮）· 词数
+    let tomorrowText = '';
+    if (m.tomorrow) {
+      const when = m.tomorrow.days === 1 ? '明天' : (m.tomorrow.days === 2 ? '后天' : m.tomorrow.days + ' 天后');
+      const round = m.tomorrow.round > store.OFFSETS.length ? '巩固轮' : '第 ' + m.tomorrow.round + ' 轮';
+      tomorrowText = when + '：第 ' + m.tomorrow.batchNo + ' 批 ' + round + ' · ' + m.tomorrow.words + ' 词';
     }
+    // R24 进度卡行：批号 · 第X天 · X/10轮 · 状态点（逾期红/今日绿/巩固紫）· 毕业 MM-DD
+    const pb = store.getParallelBatches();
+    const progressRows = pb.active.slice(0, 3).map(function (b) {
+      let flag = '';
+      if (b.state === 'consolidating') flag = b.nextDueToday ? '巩固 · 今日' : '巩固中';
+      else if (b.nextDueToday) flag = b.nextOverdueDays > 0 ? '逾期 ' + b.nextOverdueDays + ' 天' : '今日第 ' + b.nextRound + ' 轮';
+      return {
+        batchNo: b.batchNo,
+        dayN: b.dayN,
+        reviewsDone: b.reviewsDone,
+        rounds: b.rounds,
+        pct: Math.round(b.reviewsDone / b.rounds * 100),
+        flag: flag,
+        overdue: b.nextDueToday && b.nextOverdueDays > 0,
+        finalShort: b.finalDate.slice(5),
+        consolidating: b.state === 'consolidating'
+      };
+    });
     this.setData({
       accountName: s.account.name,
       accountDesc: s.account.desc,
-      learned: s.learned,
-      learning: s.learning,
-      mastered: s.mastered,
-      totalWords: s.totalWords,
-      dueCount: s.dueCount,
-      todayItems: s.todayItems,
-      wrongCount: s.wrongCount,
-      overviewCount: ov.totalBatches,
-      overviewPct: pct,
-      newPreview: newPreview,
-      reviewDesc: reviewDesc,
-      forecastText: forecastText,
       streak: store.getStreak(),
+      mission: m,
+      tomorrowText: tomorrowText,
+      activeCount: pb.activeCount,
+      progressRows: progressRows,
       pet: store.getPetInfo(),
+      wrongCount: s.wrongCount,
       family: family,
       currentAccountId: store.currentAccount().id
     });
+  },
+
+  // R24 Hero 主按钮：先做到期复习，复习完由复习页衔接进新单词页；无到期直接学新
+  goToday: function () {
+    const m = this.data.mission;
+    if (!m) return;
+    if (m.hasReview) {
+      wx.navigateTo({ url: '/pages/review/review?today=1' });
+    } else if (m.hasNew) {
+      wx.navigateTo({ url: '/pages/new/new' });
+    }
   },
 
   // 家庭榜行点击 = 切换到该账号（R13；R18 起为首页唯一的切换入口）
@@ -124,19 +129,6 @@ Page({
     const lines = ['今天也要一起背单词哦！', '每学会一个词，我就长大一点点！', '复习做得棒，我最开心啦！', '带我飞向更大的词海吧！'];
     wx.showToast({ title: lines[Math.floor(Math.random() * lines.length)], icon: 'none', duration: 2000 });
   },
-  chooseAccount: function () {
-    const that = this;
-    wx.showActionSheet({
-      itemList: store.getAccounts().map(function (a) { return a.name; }),
-      success: function (res) {
-        const account = store.getAccounts()[res.tapIndex];
-        if (!account || account.id === store.currentAccount().id) return;
-        store.switchAccount(account.id);
-        that.refresh();
-        wx.showToast({ title: '已切换：' + account.name, icon: 'none' });
-      }
-    });
-  },
   resetProgress: function () {
     const that = this;
     wx.showModal({
@@ -155,20 +147,10 @@ Page({
   showGuide: function () {
     wx.navigateTo({ url: '/pages/guide/guide' });
   },
-  goNew: function () { wx.navigateTo({ url: '/pages/new/new' }); },
+  goProgress: function () { wx.navigateTo({ url: '/pages/progress/progress' }); },
   goPhoto: function () { wx.navigateTo({ url: '/pages/photo/photo' }); },
-  goReview: function () { wx.navigateTo({ url: '/pages/review/review' }); },
   goHistory: function () { wx.navigateTo({ url: '/pages/history/history' }); },
   goWrong: function () { wx.navigateTo({ url: '/pages/wrong/wrong' }); },
   goOverview: function () { wx.navigateTo({ url: '/pages/overview/overview' }); },
-  // 词库总量 → 词库页：浏览/搜索当前账号词库；拍照生词本还可在其中删除（R09）
-  goBank: function () {
-    wx.navigateTo({
-      url: '/pages/bank/bank',
-      // navigateTo 失败默认静默；显式报错便于区分「包体未含新页面（需完整重编译）」等问题
-      fail: function (err) {
-        wx.showToast({ title: ((err && err.errMsg) || '打开词库页失败').slice(0, 40), icon: 'none' });
-      }
-    });
-  }
+  goBank: function () { wx.navigateTo({ url: '/pages/bank/bank' }); }
 });

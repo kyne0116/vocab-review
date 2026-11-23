@@ -1,14 +1,18 @@
 <view class="container {{manageMode ? 'managing' : ''}}">
 
-  <!-- 标题统计 + 搜索 -->
+  <!-- 标题统计 + 分类筛选（R23：首页统计四格经 filter 参数进入对应分类）+ 搜索 -->
   <view class="card head">
     <view class="head-row">
       <view class="head-title">📚 {{accName}} · {{total}} 词</view>
       <view class="manage-btn" bindtap="toggleManage">{{manageMode ? '完成' : '管理'}}</view>
     </view>
-    <view class="head-info text-muted">
-      已学 {{learnedCount}} · 待学 {{pendingCount}}；点单词朗读{{manageMode ? '，点行勾选' : ''}}
+    <view class="chips">
+      <view class="chip {{filter === '' ? 'on' : ''}}" data-f="" bindtap="switchFilter">全部 {{total}}</view>
+      <view class="chip {{filter === 'learned' ? 'on' : ''}}" data-f="learned" bindtap="switchFilter">已学 {{cntLearned}}</view>
+      <view class="chip {{filter === 'learning' ? 'on' : ''}}" data-f="learning" bindtap="switchFilter">复习中 {{cntLearning}}</view>
+      <view class="chip {{filter === 'mastered' ? 'on' : ''}}" data-f="mastered" bindtap="switchFilter">已掌握 {{cntMastered}}</view>
     </view>
+    <view class="head-info text-muted">点单词朗读{{manageMode ? '，点行勾选' : ''}}</view>
     <view class="search">
       <input class="search-input" placeholder="搜索单词或释义" value="{{keyword}}"
              bindinput="onSearch" confirm-type="search" />
@@ -21,6 +25,11 @@
     <block wx:if="{{keyword}}">
       <view class="empty-icon">🔍</view>
       <view>没有匹配「{{keyword}}」的词</view>
+    </block>
+    <block wx:elif="{{filter}}">
+      <view class="empty-icon">{{emptyIcon}}</view>
+      <view>{{emptyTitle}}</view>
+      <view class="text-muted" style="margin-top:12rpx;">{{emptySub}}</view>
     </block>
     <block wx:else>
       <view class="empty-icon">📚</view>
@@ -39,7 +48,7 @@
           <view class="wl-word">{{item.w}}</view>
           <view class="wl-phonic" wx:if="{{item.p}}">[{{item.p}}]</view>
           <view class="wl-photo" wx:if="{{item.photo}}">{{item.manual ? '✏️手动' : '📷拍照'}}</view>
-          <view class="wl-status {{item.learned ? (item.done ? 'lg-done' : 'lg') : 'pend'}}">{{item.statusText}}</view>
+          <view class="wl-status {{item.learned ? (item.mastered ? 'lg-done' : 'lg') : 'pend'}}">{{item.statusText}}</view>
         </view>
         <view class="wl-mean">{{item.m || '（无释义）'}}</view>
       </view>

@@ -8,6 +8,8 @@
 
 「一键初始化」（`resetAccountProgress`）只清空当前账号的全部账号级键（records / cursor / photo_words / photo_sessions / deleted / review_view / batch_extras / pet_stage），另一账号数据、全局键与当前账号指针不受影响；`vocab_photo_migrated` 迁移标记保留（防旧数据重迁）。新增账号级存储键时必须同步加入该函数的清理清单（场景 27 按 `vocab_` 前缀 + 账号后缀取全集断言，漏项会测试失败）。
 
+词库页支持分类浏览（R23，2026-11-23）：`filter` 参数（`learned`/`learning`/`mastered`，缺省全部）决定初始分类，页内 chips 可互切、搜索与管理删除在筛选下照常。分类口径与首页统计四格同源——`statSets` 单一来源同时供 `getStats` 与 `getBankEntries.mastered`，词库页行状态「已掌握/复习中」与首页一致（毕业 = 十轮完成且遗忘池空，R22 巩固口径）。已知边界：仅存在于批次快照、已不在词库/队列中的词（R14 迁移的历史已学拍照词）计入首页统计但不出现在词库页任何分类（词库页本就只展示词库+队列，非本轮引入）。
+
 ## 代码落点
 
 `utils/store.js`：`currentAccount`、`switchAccount`、`resetAccountProgress`、`currentBank`、`getBankEntries`、`removeWords`、`getAccountsOverview`。页面：`pages/index`（家庭榜行点按切换 + `goFamily` 滚动）、`pages/bank`、`pages/overview`。
@@ -20,3 +22,4 @@
 
 - 2026-11-09：首页头部卡「切换账号 ▸」绑定不存在的 `goFamily`，点击无反应（R18 收敛入口时遗留）。按 README 既定行为补 `goFamily`：`wx.pageScrollTo` 滚动到家庭榜，不新增切换路径。验证：L1 页面模拟（调用参数、只滚动不切换、家庭榜点按仍可切换）；滚动定位真机表现属 L3，未验证。
 - 2026-11-15：家庭榜行自创建（R13）起 `wx:for` 漏声明 `wx:for-item="f"`，模板引用的 `{{f.*}}` 全部取空：行内容渲染为空壳、`data-id` 绑空值被 `pickAccount` 的空 id 守卫静默吞掉，表现为「点按切换账号无响应」（2026-11-09 修复滚动后该区域才可达、缺陷暴露）。补 `wx:for-item="f"` 一处，无 JS 改动。验证：L0（WXML 声明 + 全 pages 断链检查）+ L1 页面模拟 11/11（data-id 真实绑定形状下切换、toast、刷新跟随、当前行无操作、来回切换）；逻辑门禁 495/0。待验证：L2 模拟器目检家庭榜行样式。
+- 2026-11-23（R23）：首页统计四格改为可点入口，经 `filter` 参数打开词库页对应分类清单（chips 互切、分类空态引导，见契约）。顺带修复口径矛盾：词库页行状态旧「已完成」仅看 `reviewsDone≥10`，与首页「已掌握」（十轮+遗忘池空）在 R22 巩固轮后不一致（池未空的批显示已完成、统计却计为复习中）——`getBankEntries` 的 `done` 字段移除，改 `mastered`，与 `getStats` 同经新增 `statSets` 单一来源，两处数字恒一致。验证：L1 场景 32（分类计数=统计、池中词不毕业、巩固任务存在）+ 回归 542/0；WXML 链检查（index/bank）无断链。待验证：L2 模拟器目检 chips 布局、四格点击与分类空态。

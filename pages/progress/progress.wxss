@@ -1,0 +1,138 @@
+/* ============ R24 学习进度页 ============ */
+/* 四格统计（首页迁移）+ 在学批次十轮时间线 + 毕业批折叠。
+   规范沿用首页：字号五档 40 / 34 / 30 / 26 / 22。 */
+
+/* ---- 四格统计（与原首页样式同源） ---- */
+.stats { margin-bottom: 24rpx; }
+.stats-row {
+  display: flex;
+  justify-content: space-around;
+  text-align: center;
+}
+.stats-row + .stats-row { margin-top: 20rpx; }
+.stats-num { font-size: 40rpx; font-weight: bold; color: #07c160; }
+.stats-label { font-size: 22rpx; color: #999; margin-top: 8rpx; }
+.stats-hint { font-size: 22rpx; color: #bbb; margin-top: 6rpx; }
+.stats-item.tappable { padding: 10rpx 24rpx; }
+.stats-item.tappable .stats-label { color: #07c160; }
+.stats-tip { margin-top: 28rpx; text-align: center; color: #999; font-size: 22rpx; }
+
+/* ---- 分节头 ---- */
+.sec-head-card {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 24rpx 30rpx;
+}
+.sec-title { font-size: 30rpx; font-weight: 600; }
+.sec-sub { font-size: 22rpx; color: #999; }
+
+/* ---- 在学批次卡 ---- */
+.batch-card { margin-bottom: 24rpx; border-left: 8rpx solid #07c160; }
+.batch-card:nth-last-child(1) { margin-bottom: 0; }
+.batch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.batch-title { font-size: 34rpx; font-weight: bold; }
+.batch-count {
+  margin-left: 12rpx;
+  font-size: 22rpx;
+  color: #999;
+  font-weight: 400;
+}
+.batch-chip {
+  font-size: 22rpx;
+  font-weight: 600;
+  padding: 4rpx 14rpx;
+  border-radius: 18rpx;
+  background: #eefaf2;
+  color: #07c160;
+}
+.batch-chip.cons { background: #f1edff; color: #7a5af5; }
+.batch-meta { color: #999; font-size: 24rpx; margin-top: 10rpx; }
+.batch-bar {
+  height: 14rpx;
+  background: #f0f0f0;
+  border-radius: 8rpx;
+  margin-top: 18rpx;
+  overflow: hidden;
+}
+.batch-bar-fill {
+  height: 100%;
+  background: #07c160;
+  border-radius: 8rpx;
+  transition: width .32s ease-out;
+}
+.batch-bar-fill.cons { background: #7a5af5; }
+.batch-next { color: #666; font-size: 26rpx; margin-top: 14rpx; }
+.batch-next.od { color: #e64340; font-weight: 600; }
+.batch-final {
+  color: #999;
+  font-size: 22rpx;
+  margin-top: 6rpx;
+  padding-bottom: 18rpx;
+  border-bottom: 2rpx solid #f2f2f2;
+}
+
+/* ---- 十轮时间线：轮次格子流式排布 ---- */
+.tl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 20rpx;
+}
+.tl-cell {
+  width: 148rpx;
+  border-radius: 14rpx;
+  background: #f5f6f8;
+  padding: 12rpx 0 10rpx;
+  text-align: center;
+}
+.tl-round { font-size: 26rpx; font-weight: 600; color: #666; }
+.tl-date { font-size: 22rpx; color: #bbb; margin-top: 4rpx; }
+.tl-flag { font-size: 20rpx; color: #bbb; margin-top: 2rpx; min-height: 26rpx; }
+.tl-cell.done { background: #eefaf2; }
+.tl-cell.done .tl-round { color: #07c160; }
+.tl-cell.done .tl-date { color: #07c160; }
+.tl-cell.done .tl-flag { color: #07c160; }
+.tl-cell.overdue { background: #fff0ef; }
+.tl-cell.overdue .tl-round,
+.tl-cell.overdue .tl-date,
+.tl-cell.overdue .tl-flag { color: #e64340; }
+.tl-cell.today {
+  background: #eefaf2;
+  border: 2rpx solid #07c160;
+}
+.tl-cell.today .tl-round,
+.tl-cell.today .tl-flag { color: #07c160; font-weight: 600; }
+.tl-cell.today .tl-date { color: #666; }
+.tl-cell.cons { background: #f1edff; }
+.tl-cell.cons .tl-round,
+.tl-cell.cons .tl-date,
+.tl-cell.cons .tl-flag { color: #7a5af5; }
+
+/* ---- 空态与毕业批 ---- */
+.empty-card { text-align: center; padding: 60rpx 30rpx; }
+.empty-emoji { font-size: 72rpx; line-height: 1; }
+.empty-text { color: #666; font-size: 28rpx; margin-top: 16rpx; }
+
+.grad-card { margin-bottom: 24rpx; }
+.grad-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.grad-title { font-size: 30rpx; font-weight: 600; }
+.grad-toggle { color: #576b95; font-size: 26rpx; }
+.grad-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  border-bottom: 2rpx solid #f2f2f2;
+}
+.grad-row:last-child { border-bottom: none; }
+.grad-left { font-size: 26rpx; color: #666; }
+.grad-date { font-size: 22rpx; color: #07c160; font-weight: 600; }

@@ -3,7 +3,7 @@
 const ACCOUNTS = require('../data/accounts.js');
 
 const BATCH_SIZE = 35;                              // 每批新单词数量
-const OFFSETS = [1, 2, 3, 4, 6, 8, 11, 13, 16, 21]; // 10次复习所在天（学习日为第0天）
+const OFFSETS = [1, 2, 3, 5, 7, 9, 12, 14, 17, 21]; // 10次复习所在天（学习日为第0天）
 const FULL_REVIEW_ROUNDS = 3;                       // 前3次复习全部内容，后7次复习遗忘词
 const CONSOLIDATE_INTERVAL_DAYS = 7;                // R22：十轮完成后池非空的批，隔这么多天再考一轮遗忘池
 
@@ -206,21 +206,24 @@ function migratePhotoAccount(targetId) {
 
 // 词库页数据（R09）：当前账号词条附学习状态，状态从批次快照反查
 // （R15 起一词可属多批——拍照批含已收录灰词，状态显示所在最新批次）。batchNo=0 表示待学习。
-// 拍照与静态账号通用（R09-2：全账号可删）。
+// 拍照与静态账号通用（R09-2：全账号可删）。R23：mastered 与首页统计同口径（statSets
+// 单一来源，替代旧 done=十轮完成口径——R22 后池未空的批仍在巩固，行状态如实「复习中」）。
 function getBankEntries() {
+  const rs = getRecords();
   const status = {};
-  getRecords().forEach(function (rec) {
+  rs.forEach(function (rec) {
     rec.words.forEach(function (x) {
-      status[x.w] = { batchNo: rec.batchNo, done: rec.reviewsDone >= OFFSETS.length };
+      status[x.w] = { batchNo: rec.batchNo };
     });
   });
+  const sets = statSets(rs);
   return currentBank().map(function (x) {
     const st = status[x.w];
     return {
       w: x.w, m: x.m, p: x.p, addedAt: x.addedAt,
       learned: !!st,
       batchNo: st ? st.batchNo : 0,
-      done: st ? st.done : false
+      mastered: st ? !!sets.mastered[x.w] : false
     };
   }).concat(getAccountPhotoWords(currentAccount().id).map(function (x) {
     // R14：拍照词附在静态词之后，状态同样快照反查；photo=true 供词库页打「拍照」标
@@ -229,7 +232,7 @@ function getBankEntries() {
       w: x.w, m: x.m, p: x.p, addedAt: x.addedAt,
       learned: !!st,
       batchNo: st ? st.batchNo : 0,
-      done: st ? st.done : false,
+      mastered: st ? !!sets.mastered[x.w] : false,
       photo: true,
       manual: !!x.manual // 手动录入来源（词库页打「手动」标，缺省为拍照）
     };
@@ -1037,23 +1040,155 @@ function getStubbornWords(limit) {
     .slice(0, n);
 }
 
+/* ---------- 今日学习与并行进度（首页 Hero / 学习进度页，纯读推演不写存储） ---------- */
+// 今日任务构成与状态（R24）：
+// - 复习任务 = 当天到期合并会话的词数（到期批遗忘池全空 = 空轮，计 0 词，进复习页自动完成）
+// - 新学任务 = 待出批存在且今天还没学过新批（每天建议一批：今天已学 → 视为完成）
+// - 三态：todo=有任务；done=今日无任务（已做完或今天本来没有，仍有未来轮次）；
+//   graduated=全部毕业（无可学新批且再无任何复习节点）
+// - 预计时长为粗估参数（复习词×8秒 + 新学词×15秒，向上取整到 5 分钟），README 可调
+function getTodayMission() {
+  const today = todayStr();
+  const rs = getRecords();
+  const session = buildReviewSession();
+  const learnedToday = rs.some(function (r) { return r.date === today; });
+  const reviewedToday = rs.some(function (r) {
+    return (r.reviewHistory || []).some(function (h) { return h.date === today; });
+  });
+  const nb = nextBatch();
+  const hasReview = session.items.length > 0;
+  const hasNew = !!nb && !learnedToday;
+  const nd = getNextDueInfo();
+  const state = (hasReview || hasNew) ? 'todo' : (nd ? 'done' : 'graduated');
+  // 明日预告：最近一个未来复习节点（含轮次与该轮词数），done 态展示用
+  let tomorrow = null;
+  if (nd) {
+    const rec = rs.find(function (r) { return r.batchId === nd.batchId; });
+    tomorrow = {
+      batchNo: nd.batchNo,
+      date: nd.date,
+      days: nd.days,
+      round: rec ? rec.reviewsDone + 1 : 0,
+      words: rec
+        ? (rec.reviewsDone < FULL_REVIEW_ROUNDS ? rec.words.length : rec.wrongPool.length)
+        : 0
+    };
+  }
+  const estSec = session.items.length * 8 + (hasNew ? nb.words.length : 0) * 15;
+  return {
+    state: state,
+    hasReview: hasReview,
+    hasNew: hasNew,
+    reviewWords: session.items.length,
+    dueCount: session.due.length,
+    newWords: hasNew ? nb.words.length : 0,
+    newIsPhoto: hasNew ? !!nb.photo : false,
+    newIsManual: hasNew ? !!nb.manual : false,
+    newBatchNo: hasNew ? nb.batchNo : 0,
+    learnedToday: learnedToday,
+    reviewedToday: reviewedToday,
+    estMin: Math.ceil(estSec / 300) * 5,
+    tomorrow: tomorrow
+  };
+}
+
+// 并行批次进度（R24）：active = 十轮未满（learning）或十轮完成但遗忘池非空
+// （consolidating，R22 巩固循环）；graduated = 彻底结业批（进度页折叠分组用）。
+// - dayN = 今天是学习日起第几天（学习当天 = 第 1 天）
+// - timeline 十轮逐轮：doneDate 非空 = 已完成（实际日期）；否则 planDate = 学习日 +
+//   OFFSETS[i]，节点日已过未完成标 overdue；巩固轮（round > 10）按实际日期追加在尾部
+// - finalDate = 第 10 轮（毕业）计划日；逾期复习会使实际毕业延后，按计划日展示
+function getParallelBatches() {
+  const today = todayStr();
+  const rounds = OFFSETS.length;
+  const active = [];
+  const graduated = [];
+  getRecords().forEach(function (rec) {
+    if (rec.words.length === 0 && rec.wrongPool.length === 0) return; // 整批删空
+    const doneByRound = {};
+    (rec.reviewHistory || []).forEach(function (h) { doneByRound[h.round] = h.date; });
+    const timeline = [];
+    for (var i = 0; i < rounds; i++) {
+      const rn = i + 1;
+      const plan = addDays(rec.date, OFFSETS[i]);
+      const done = doneByRound[rn] || '';
+      const d = diffDays(today, plan); // plan - today：负 = 已过
+      timeline.push({
+        round: rn,
+        planDate: plan,
+        doneDate: done,
+        status: done ? 'done' : (d < 0 ? 'overdue' : (d === 0 ? 'today' : 'future')),
+        cons: false
+      });
+    }
+    (rec.reviewHistory || []).forEach(function (h) {
+      if (h.round > rounds) {
+        timeline.push({ round: h.round, planDate: h.date, doneDate: h.date, status: 'done', cons: true });
+      }
+    });
+    const state = rec.reviewsDone >= rounds
+      ? (rec.wrongPool.length ? 'consolidating' : 'graduated')
+      : 'learning';
+    let nextDate = '';
+    if (state === 'learning') nextDate = addDays(rec.date, OFFSETS[rec.reviewsDone]);
+    else if (state === 'consolidating') nextDate = addDays(lastReviewDate(rec), CONSOLIDATE_INTERVAL_DAYS);
+    let nextOverdueDays = 0;
+    let nextDueToday = false;
+    if (nextDate) {
+      const d = diffDays(today, nextDate);
+      nextOverdueDays = d < 0 ? -d : 0;
+      nextDueToday = d <= 0;
+    }
+    const item = {
+      batchNo: rec.batchNo,
+      batchId: rec.batchId,
+      count: rec.words.length,
+      date: rec.date,
+      dayN: Math.max(1, diffDays(rec.date, today) + 1),
+      reviewsDone: rec.reviewsDone,
+      rounds: rounds,
+      wrongCount: rec.wrongPool.length,
+      state: state,
+      nextRound: state === 'graduated' ? 0 : rec.reviewsDone + 1,
+      nextDate: nextDate,
+      nextOverdueDays: nextOverdueDays,
+      nextDueToday: nextDueToday,
+      nextWords: state === 'learning'
+        ? (rec.reviewsDone < FULL_REVIEW_ROUNDS ? rec.words.length : rec.wrongPool.length)
+        : (state === 'consolidating' ? rec.wrongPool.length : 0),
+      finalDate: addDays(rec.date, OFFSETS[rounds - 1]),
+      timeline: timeline
+    };
+    (state === 'graduated' ? graduated : active).push(item);
+  });
+  return { active: active, graduated: graduated, activeCount: active.length };
+}
+
 /* ---------- 统计 ---------- */
+// R23：统计分类集合——getStats 与 getBankEntries.mastered 共用同一来源，保证首页四格
+// 数字与词库页分类筛选计数永远一致。mastered = 十轮完成且遗忘池空的批的全量词，再剔除
+// 仍在任何遗忘池的词（R22 巩固轮口径：池未空 = 还没毕业）。
+function statSets(rs) {
+  const learned = {};
+  const mastered = {};
+  const active = {};
+  rs.forEach(function (r) {
+    r.words.forEach(function (w) { learned[w.w] = true; });
+    r.wrongPool.forEach(function (w) { active[w.w] = true; });
+    if (r.reviewsDone >= OFFSETS.length && r.wrongPool.length === 0) {
+      r.words.forEach(function (w) { mastered[w.w] = true; });
+    }
+  });
+  Object.keys(active).forEach(function (w) { delete mastered[w]; });
+  return { learned: learned, mastered: mastered, active: active };
+}
+
 function getStats() {
   const rs = getRecords();
   const session = buildReviewSession();
-  const learnedSet = {};
-  const masteredSet = {};
-  const activePool = {};
-  rs.forEach(function (r) {
-    r.words.forEach(function (w) { learnedSet[w.w] = true; });
-    r.wrongPool.forEach(function (w) { activePool[w.w] = true; });
-    if (r.reviewsDone >= OFFSETS.length && r.wrongPool.length === 0) {
-      r.words.forEach(function (w) { masteredSet[w.w] = true; });
-    }
-  });
-  Object.keys(activePool).forEach(function (w) { delete masteredSet[w]; });
-  const learned = Object.keys(learnedSet).length;
-  const mastered = Object.keys(masteredSet).length;
+  const sets = statSets(rs);
+  const learned = Object.keys(sets.learned).length;
+  const mastered = Object.keys(sets.mastered).length;
   return {
     account: currentAccount(),
     batches: rs.length,
@@ -1109,6 +1244,8 @@ module.exports = {
   getAccuracySummary: getAccuracySummary,
   getReviewForecast: getReviewForecast,
   getStubbornWords: getStubbornWords,
+  getTodayMission: getTodayMission,
+  getParallelBatches: getParallelBatches,
   getPetInfo: getPetInfo,
   getAccountsOverview: getAccountsOverview,
   PET_STAGES: PET_STAGES,

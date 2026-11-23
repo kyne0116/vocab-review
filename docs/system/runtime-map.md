@@ -3,7 +3,7 @@
 | 层 | 位置 | 责任 |
 |---|---|---|
 | 应用入口 | `app.js`、`app.json`、`app.wxss` | 全局启动和页面注册 |
-| 页面 | `pages/index`、`new`、`study`、`review`、`spell`、`history`、`wrong`、`overview`、`photo`、`bank`、`guide` | 用户交互 |
+| 页面 | `pages/index`、`new`、`study`、`review`、`spell`、`history`、`wrong`、`overview`、`photo`、`bank`、`guide`、`progress` | 用户交互（`progress` = R24 学习进度页：四格统计 + 并行批次十轮时间线） |
 | 状态与持久化 | `utils/store.js` | 账号、批次、复习、统计、本地键 |
 | 拍照链路 | `utils/llm.js`、`utils/ocr.js`、`utils/wordParser.js` | 识别和候选解析 |
 | 词典与声音 | `utils/lookup.js`、`utils/tts.js` | 查义、拓展、朗读 |
